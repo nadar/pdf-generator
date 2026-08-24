@@ -98,12 +98,45 @@ if (file_put_contents($output, $pdf->bytes()) === false) {
 }
 ```
 
+## `PdfGenerator` API reference
+
+| Method | Purpose |
+| --- | --- |
+| `raw()` | Access the wrapped `Fpdi` instance for low-level calls. |
+| `__call()` | Proxy unknown methods to `Fpdi`; throws on missing methods. |
+| `creator(string $creator)` | Set PDF creator metadata. |
+| `author(string $author)` | Set PDF author metadata. |
+| `title(string $title)` | Set PDF title metadata. |
+| `subject(string $subject)` | Set PDF subject metadata. |
+| `keywords(string $keywords)` | Set PDF keywords metadata. |
+| `deterministic(int $timestamp)` | Set deterministic creation/modification timestamps. |
+| `debug(bool $enabled)` | Enable or disable debug rendering helpers. |
+| `page(?string $template = null, string|array|null $format = null, ?string $orientation = null, int $templatePage = 1, string $box = 'CropBox')` | Add a page, optionally stamp a template and auto-derive size/orientation. |
+| `stamp(string $template, int $sourcePage = 1, string $box = 'CropBox')` | Stamp a template page on the current page. |
+| `templateSize(string $template, int $page = 1)` | Read template page size as `PageSize`. |
+| `assertTemplateSize(string $template, float $w, float $h, float $tolerance = 0.05)` | Assert expected template size. |
+| `write(TextBox $box, string $text)` | Write text/HTML into a typed box with overflow handling. |
+| `writeText(float $x, float $y, float $w, string $text, ?float $h = null, ?string $font = null, ?float $size = null, string $align = 'L', ?Overflow $overflow = null)` | Convenience writer for plain text. |
+| `writeHtml(float $x, float $y, float $w, string $html, ?float $h = null, ?string $font = null, ?float $size = null, string $align = 'L', ?Overflow $overflow = null)` | Convenience writer for HTML content. |
+| `writeRotated(float $x, float $y, float $w, float $angle, string $text, ?float $h = null, ?string $font = null, ?float $size = null, string $align = 'L', ?Overflow $overflow = null)` | Write rotated text. |
+| `writeAll(iterable $boxes, array $data)` | Fill a full layout from keyed data fields. |
+| `measureText(string $text, float $w, ?TextBox $box = null)` | Measure rendered plain-text height. |
+| `measureHtml(string $html, float $w, ?TextBox $box = null)` | Measure rendered HTML height. |
+| `fits(TextBox $box, string $text)` | Check whether text fits the box height. |
+| `truncateToWidth(string $text, float $w, string $ellipsis = '...')` | Truncate text to target width. |
+| `append(string $pdfBytes)` | Append all pages from PDF bytes. |
+| `appendFile(string $path)` | Append all pages from an existing PDF file. |
+| `bytes()` | Return final PDF as string bytes. |
+| `save(string $path)` | Save final PDF to filesystem. |
+| `debugGrid(float $step)` | Draw a debug grid on the current page (when debug is enabled). |
+
 ## Handy examples
 
 The repository includes runnable examples in [`/examples`](./examples):
 
 - [`examples/basic-template.php`](./examples/basic-template.php): template-stamped page + layout writing
 - [`examples/overflow-policies.php`](./examples/overflow-policies.php): all overflow modes in one output
+- [`examples/events-pagination.php`](./examples/events-pagination.php): large event list with automatic page breaks
 - [`examples/BrandPdfSettings.php`](./examples/BrandPdfSettings.php): minimal settings implementation used by examples
 
 ## License notes

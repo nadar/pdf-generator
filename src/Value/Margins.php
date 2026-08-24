@@ -2,9 +2,9 @@
 
 namespace Nadar\PdfGenerator\Value;
 
-final readonly class Margins
+final class Margins
 {
-    public function __construct(public float $left, public float $top, public float $right, public ?float $bottom = null)
+    public function __construct(public readonly float $left, public readonly float $top, public readonly float $right, public readonly ?float $bottom = null)
     {
     }
 

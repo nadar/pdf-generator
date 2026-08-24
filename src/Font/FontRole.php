@@ -2,9 +2,9 @@
 
 namespace Nadar\PdfGenerator\Font;
 
-final readonly class FontRole
+final class FontRole
 {
-    public function __construct(public string $family, public string $style = '')
+    public function __construct(public readonly string $family, public readonly string $style = '')
     {
     }
 }

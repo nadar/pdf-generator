@@ -2,10 +2,10 @@
 
 namespace Nadar\PdfGenerator\Value;
 
-final readonly class Color
+final class Color
 {
     /** @param list<float|int> $channels */
-    private function __construct(public string $model, public array $channels)
+    private function __construct(public readonly string $model, public readonly array $channels)
     {
     }
 

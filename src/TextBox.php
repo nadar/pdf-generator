@@ -4,22 +4,22 @@ namespace Nadar\PdfGenerator;
 
 use Nadar\PdfGenerator\Value\Color;
 
-final readonly class TextBox
+final class TextBox
 {
     public function __construct(
-        public string $id,
-        public float $x,
-        public float $y,
-        public float $w,
-        public ?float $h = null,
-        public ?string $font = null,
-        public ?float $size = null,
-        public string $align = 'L',
-        public ?Color $color = null,
-        public ?Overflow $overflow = null,
-        public float $rotation = 0.0,
-        public float $minSize = 6.0,
-        public bool $html = false
+        public readonly string $id,
+        public readonly float $x,
+        public readonly float $y,
+        public readonly float $w,
+        public readonly ?float $h = null,
+        public readonly ?string $font = null,
+        public readonly ?float $size = null,
+        public readonly string $align = 'L',
+        public readonly ?Color $color = null,
+        public readonly ?Overflow $overflow = null,
+        public readonly float $rotation = 0.0,
+        public readonly float $minSize = 6.0,
+        public readonly bool $html = false
     ) {
     }
 

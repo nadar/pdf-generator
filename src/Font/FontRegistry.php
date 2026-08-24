@@ -6,9 +6,9 @@ use Nadar\PdfGenerator\Exception\FontCacheMissingException;
 use Nadar\PdfGenerator\Exception\FontException;
 use setasign\Fpdi\Tcpdf\Fpdi;
 
-final readonly class FontRegistry
+final class FontRegistry
 {
-    public function __construct(private string $fontPath, private string $cachePath, private FontSet $set)
+    public function __construct(private readonly string $fontPath, private readonly string $cachePath, private readonly FontSet $set)
     {
     }
 

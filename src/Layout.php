@@ -6,10 +6,10 @@ use IteratorAggregate;
 use Traversable;
 
 /** @implements IteratorAggregate<string,TextBox> */
-final readonly class Layout implements IteratorAggregate
+final class Layout implements IteratorAggregate
 {
     /** @param array<string,TextBox> $items */
-    public function __construct(private array $items)
+    public function __construct(private readonly array $items)
     {
     }
 

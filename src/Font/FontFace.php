@@ -2,13 +2,13 @@
 
 namespace Nadar\PdfGenerator\Font;
 
-final readonly class FontFace
+final class FontFace
 {
     public function __construct(
-        public string $family,
-        public string $style,
-        public string $ttfFile,
-        public string $cacheKey
+        public readonly string $family,
+        public readonly string $style,
+        public readonly string $ttfFile,
+        public readonly string $cacheKey
     ) {
     }
 }

@@ -12,7 +12,7 @@ final class Html
     public static function lines(string ...$lines): string
     {
         return implode('<br/>', array_map(
-            static fn(string $line): string => htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            static fn (string $line): string => htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
             $lines
         ));
     }

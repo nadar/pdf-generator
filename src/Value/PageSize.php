@@ -2,9 +2,9 @@
 
 namespace Nadar\PdfGenerator\Value;
 
-final readonly class PageSize
+final class PageSize
 {
-    public function __construct(public float $width, public float $height)
+    public function __construct(public readonly float $width, public readonly float $height)
     {
     }
 
