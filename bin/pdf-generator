@@ -1,0 +1,49 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Nadar\PdfGenerator\Contract\PdfSettingsInterface;
+use Nadar\PdfGenerator\Support\FontCompiler;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$command = $argv[1] ?? '';
+$options = getopt('', ['settings:']);
+$settingsClass = $options['settings'] ?? null;
+
+if (!$settingsClass || !class_exists($settingsClass)) {
+    fwrite(STDERR, "Missing or unknown --settings class.\n");
+    exit(1);
+}
+
+$settings = new $settingsClass();
+if (!$settings instanceof PdfSettingsInterface) {
+    fwrite(STDERR, "Settings class must implement PdfSettingsInterface.\n");
+    exit(1);
+}
+
+switch ($command) {
+    case 'fonts:build':
+        $compiled = FontCompiler::compileDirectory($settings->fontPath(), $settings->fontCachePath());
+        foreach ($compiled as $file => $key) {
+            fwrite(STDOUT, sprintf("compiled %s -> %s\n", $file, $key));
+        }
+        exit(0);
+
+    case 'fonts:check':
+        $failed = false;
+        foreach ($settings->fonts()->faces() as $face) {
+            $cache = rtrim($settings->fontCachePath(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $face->cacheKey . '.php';
+            $ok = is_file($cache);
+            fwrite(STDOUT, sprintf("%s -> %s [%s]\n", $face->ttfFile, $face->cacheKey, $ok ? 'ok' : 'missing'));
+            if (!$ok) {
+                $failed = true;
+            }
+        }
+        exit($failed ? 1 : 0);
+
+    default:
+        fwrite(STDERR, "Usage: vendor/bin/pdf-generator fonts:build|fonts:check --settings=App\\Pdf\\BrandSettings\n");
+        exit(1);
+}
