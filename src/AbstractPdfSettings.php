@@ -8,6 +8,7 @@ use Nadar\PdfGenerator\Value\Margins;
 
 abstract class AbstractPdfSettings implements PdfSettingsInterface
 {
+    /** @return string|list<float> */
     public function pageFormat(): string|array
     {
         return 'A4';

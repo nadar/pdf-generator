@@ -4,6 +4,7 @@ namespace Nadar\PdfGenerator\Support;
 
 final class Fields
 {
+    /** @param array<string,mixed> $data */
     public static function get(array $data, string $key, string $default = ''): string
     {
         if (array_key_exists($key, $data)) {
@@ -18,7 +19,13 @@ final class Fields
         return $default;
     }
 
-    public static function all(array $data, array $keys): array
+    /**
+     * @param array<string,mixed> $data
+     * @param iterable<string> $keys
+     *
+     * @return array<string,string>
+     */
+    public static function all(array $data, iterable $keys): array
     {
         $result = [];
         foreach ($keys as $key) {

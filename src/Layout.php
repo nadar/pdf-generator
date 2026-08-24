@@ -13,7 +13,8 @@ final class Layout implements IteratorAggregate
     {
     }
 
-    public static function fromArray(array $rows): self
+    /** @param iterable<array<string,mixed>> $rows */
+    public static function fromArray(iterable $rows): self
     {
         $items = [];
         foreach ($rows as $row) {

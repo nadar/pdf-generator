@@ -17,6 +17,7 @@ interface PdfSettingsInterface
 
     public function templatePath(): string;
 
+    /** @return string|list<float> */
     public function pageFormat(): string|array;
 
     public function pageOrientation(): string;

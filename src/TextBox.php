@@ -23,6 +23,7 @@ final class TextBox
     ) {
     }
 
+    /** @param array<string,mixed> $row */
     public static function fromArray(array $row): self
     {
         return new self(
@@ -35,7 +36,7 @@ final class TextBox
             isset($row['size']) ? (float) $row['size'] : null,
             isset($row['align']) ? (string) $row['align'] : 'L',
             isset($row['color']) ? Color::hex((string) $row['color']) : null,
-            isset($row['overflow']) ? Overflow::from((string) $row['overflow']) : null,
+            isset($row['overflow']) ? Overflow::fromString((string) $row['overflow']) : null,
             isset($row['rotation']) ? (float) $row['rotation'] : 0.0,
             isset($row['minSize']) ? (float) $row['minSize'] : 6.0,
             isset($row['html']) && (bool) $row['html']

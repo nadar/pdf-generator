@@ -60,6 +60,7 @@ final class PdfGenerator
         return $this->pdf;
     }
 
+    /** @param list<mixed> $args */
     public function __call(string $method, array $args): mixed
     {
         if (!method_exists($this->pdf, $method)) {
@@ -119,6 +120,9 @@ final class PdfGenerator
         return $this;
     }
 
+    /**
+     * @param null|string|list<float> $format
+     */
     public function page(?string $template = null, string|array|null $format = null, ?string $orientation = null, int $templatePage = 1, string $box = 'CropBox'): static
     {
         $resolvedFormat = $format ?? $this->settings->pageFormat();
@@ -152,6 +156,9 @@ final class PdfGenerator
         $this->pdf->setSourceFile($path);
         $templateId = $this->pdf->importPage($sourcePage, $box);
         $size = $this->pdf->getTemplateSize($templateId);
+        if (!is_array($size)) {
+            throw new ConfigurationException(sprintf('Unable to read imported template size for "%s".', $template));
+        }
         $this->pdf->useTemplate($templateId, 0, 0, $size['width'], $size['height'], true);
 
         return $this;
@@ -225,6 +232,10 @@ final class PdfGenerator
         return $this->write($box, $text);
     }
 
+    /**
+     * @param iterable<int|string,TextBox> $boxes
+     * @param array<string,mixed> $data
+     */
     public function writeAll(iterable $boxes, array $data): static
     {
         foreach ($boxes as $id => $box) {
@@ -239,7 +250,7 @@ final class PdfGenerator
     {
         $this->selectFont($box?->font, $box?->size);
 
-        return (float) $this->pdf->getStringHeight($w, Text::normalize($text), false, true, 0, 0);
+        return (float) $this->pdf->getStringHeight($w, Text::normalize($text), false, true, null, 0);
     }
 
     public function measureHtml(string $html, float $w, ?TextBox $box = null): float
@@ -264,7 +275,7 @@ final class PdfGenerator
 
         $this->pdf->startTransaction();
         $before = $this->pdf->GetY();
-        $this->pdf->writeHTMLCell($w, null, $x, $y, $html, 0, 1, false, true, $align);
+        $this->pdf->writeHTMLCell($w, 0.0, $x, $y, $html, 0, 1, false, true, $align);
         $height = $this->pdf->GetY() - $before;
         $this->pdf->rollbackTransaction(true);
 
@@ -321,6 +332,9 @@ final class PdfGenerator
         for ($i = 1; $i <= $pages; ++$i) {
             $tpl = $this->pdf->importPage($i);
             $size = $this->pdf->getTemplateSize($tpl);
+            if (!is_array($size)) {
+                throw new ConfigurationException('Unable to read imported appended template size.');
+            }
             $this->pdf->AddPage($size['width'] > $size['height'] ? 'L' : 'P', [$size['width'], $size['height']]);
             $this->pdf->useTemplate($tpl);
         }
@@ -442,7 +456,7 @@ final class PdfGenerator
     private function renderCell(TextBox $box, string $text): void
     {
         if ($box->html) {
-            $this->pdf->writeHTMLCell($box->w, $box->h, $box->x, $box->y, $text, 0, 1, false, true, $box->align);
+            $this->pdf->writeHTMLCell($box->w, $box->h ?? 0.0, $box->x, $box->y, $text, 0, 1, false, true, $box->align);
 
             return;
         }

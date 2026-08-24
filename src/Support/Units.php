@@ -19,6 +19,7 @@ final class Units
         return $in * 25.4;
     }
 
+    /** @return list<float> */
     public static function pageSize(string $format, string $orientation = 'P'): array
     {
         $sizes = [

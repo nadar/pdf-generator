@@ -17,9 +17,9 @@ final class Color
         }
 
         return self::rgb(
-            hexdec(substr($value, 0, 2)),
-            hexdec(substr($value, 2, 2)),
-            hexdec(substr($value, 4, 2))
+            (int) hexdec(substr($value, 0, 2)),
+            (int) hexdec(substr($value, 2, 2)),
+            (int) hexdec(substr($value, 4, 2))
         );
     }
 

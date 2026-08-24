@@ -13,6 +13,7 @@ final class PageSize
         return $this->width > $this->height ? 'L' : 'P';
     }
 
+    /** @return list<float> */
     public function asArray(): array
     {
         return [$this->width, $this->height];
