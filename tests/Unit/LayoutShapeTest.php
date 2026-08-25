@@ -17,7 +17,7 @@ final class LayoutShapeTest extends TestCase
 
         self::assertSame(['title', 'meta'], $layout->ids());
 
-        $title = $layout->get('title');
+        $title = $layout->text('title');
         self::assertSame(Align::Left, $title->align);
         self::assertSame(Anchor::Baseline, $title->anchor);
         self::assertSame(Overflow::ShrinkThenClip, $title->overflow);
@@ -25,7 +25,7 @@ final class LayoutShapeTest extends TestCase
         self::assertSame(13.0, $title->minSize);
         self::assertSame(24.0, $title->size);
 
-        $meta = $layout->get('meta');
+        $meta = $layout->text('meta');
         self::assertSame(Anchor::Top, $meta->anchor, 'omitted keys fall back to defaults');
         self::assertNull($meta->overflow);
     }

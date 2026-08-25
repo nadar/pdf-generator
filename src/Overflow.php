@@ -2,6 +2,8 @@
 
 namespace Nadar\PdfGenerator;
 
+use Nadar\PdfGenerator\Exception\InvalidValueException;
+
 /**
  * What to do when text does not fit the height declared on a {@see TextBox}.
  *
@@ -47,7 +49,7 @@ enum Overflow
      * Accepts `none`, `shrink`, `clip`, `truncate` and `shrinkThenClip` in
      * camel, snake or kebab case.
      *
-     * @throws \InvalidArgumentException on an unknown name
+     * @throws InvalidValueException on an unknown name
      */
     public static function fromString(string $value): self
     {
@@ -57,7 +59,7 @@ enum Overflow
             'clip' => self::Clip,
             'truncate' => self::Truncate,
             'shrinkthenclip' => self::ShrinkThenClip,
-            default => throw new \InvalidArgumentException(sprintf(
+            default => throw new InvalidValueException(sprintf(
                 'Unknown overflow value "%s". Expected one of: none, shrink, clip, truncate, shrinkThenClip.',
                 $value
             )),

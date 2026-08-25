@@ -77,8 +77,37 @@ final class DocumentTest extends IntegrationTestCase
         $this->makeTemplate('a4.pdf');
 
         $this->expectException(TemplateSizeMismatchException::class);
-        $this->expectExceptionMessageMatches('/Expected 148\.000 x 210\.000 mm, got 210\.\d+ x 297\.\d+ mm/');
+        $this->expectExceptionMessageMatches('/Expected 148\.000 x 210\.000 mm.*got 210\.\d+ x 297\.\d+ mm.*templateSize\(\)/s');
         $this->pdf()->assertTemplateSize('a4.pdf', 148.0, 210.0);
+    }
+
+    /**
+     * Design tools do not export exact ISO sizes - Canva's A4 is
+     * 210.079 x 297.127 mm - so the natural assertion must not need a
+     * hand-tuned tolerance to be usable at all.
+     */
+    public function testAssertTemplateSizeAcceptsDesignToolRounding(): void
+    {
+        $source = new PdfGenerator($this->settings());
+        $source->page(null, [210.079, 297.127]);
+        $source->save($this->workspace . '/canva.pdf');
+
+        $pdf = $this->pdf();
+
+        self::assertSame(0.5, PdfGenerator::DEFAULT_SIZE_TOLERANCE);
+        self::assertSame($pdf, $pdf->assertTemplateSize('canva.pdf', 210.0, 297.0));
+    }
+
+    /** The default must still separate formats anyone could confuse. */
+    public function testDefaultToleranceStillCatchesARealMismatch(): void
+    {
+        // US Letter is 215.9 x 279.4 mm
+        $source = new PdfGenerator($this->settings());
+        $source->page(null, [215.9, 279.4]);
+        $source->save($this->workspace . '/letter.pdf');
+
+        $this->expectException(TemplateSizeMismatchException::class);
+        $this->pdf()->assertTemplateSize('letter.pdf', 210.0, 297.0);
     }
 
     /** The message must say that the argument is a basename, not a path. */

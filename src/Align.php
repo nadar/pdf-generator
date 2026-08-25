@@ -2,6 +2,8 @@
 
 namespace Nadar\PdfGenerator;
 
+use Nadar\PdfGenerator\Exception\InvalidValueException;
+
 /**
  * Horizontal text alignment inside a {@see TextBox}.
  *
@@ -21,7 +23,7 @@ enum Align: string
      * Also understands the spelled-out names (`left`, `center`, `centre`,
      * `right`, `justify`) so layouts loaded from YAML/JSON stay readable.
      *
-     * @throws \InvalidArgumentException when the value maps to no alignment
+     * @throws InvalidValueException when the value maps to no alignment
      */
     public static function coerce(self|string $value): self
     {
@@ -34,7 +36,7 @@ enum Align: string
             'c', 'center', 'centre' => self::Center,
             'r', 'right' => self::Right,
             'j', 'justify', 'justified' => self::Justify,
-            default => throw new \InvalidArgumentException(sprintf(
+            default => throw new InvalidValueException(sprintf(
                 'Unknown alignment "%s". Use Align::Left, Align::Center, Align::Right or Align::Justify.',
                 $value
             )),

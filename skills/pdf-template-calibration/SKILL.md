@@ -49,6 +49,10 @@ Assert the geometry in code, so a re-export at the wrong size fails loudly:
 $pdf->assertTemplateSize('poster.pdf', 210.0, 297.0);
 ```
 
+The default 0.5 mm tolerance absorbs design-tool rounding - Canva's "A4" is
+210.079 x 297.127 mm - while still catching a genuinely wrong format. Assert the
+measured values instead if the design demands it.
+
 ## 2. Positions
 
 ```bash
@@ -129,7 +133,21 @@ where a photo is missing is the **designed** fallback, so implement it as one:
 $pdf->image(
     ImageBox::circle('photo', cx: 30.34, cy: 68.3, diameter: 30.85, placeholder: Color::hex('#ff920c')),
     $event['image'],
+    // the placeholder fill is painted first; this labels it
+    fn (ImageBox $box) => $pdf->writeText($box->x, $box->y + $box->h / 2, $box->w, 'Bild'),
 );
+```
+
+Put the whole row - text, photo and code - in one `Layout` and let `repeat()`
+shift it, so the measured pitch appears exactly once:
+
+```php
+$row = Layout::fromArray([...])->with(
+    ImageBox::circle('photo', cx: 30.34, cy: 68.3, diameter: 30.85),
+    new QrBox('link', x: 179, y: 58.63, size: 19.5),
+);
+
+foreach ($row->repeat(times: 6, dy: 40.3) as $index => $slots) { /* ... */ }
 ```
 
 Likewise, a long title in a fixed slot means `maxLines: 1` with a `minSize` floor,

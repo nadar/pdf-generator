@@ -24,10 +24,9 @@ final class Color
     /**
      * @param string           $model    one of `RGB`, `CMYK`, `GRAY`
      * @param list<float|int>  $channels 3 channels for RGB (0-255), 4 for CMYK (0-100),
-     *                                   1 for GRAY (0-255). Prefer {@see toArray()} over
-     *                                   reading this property directly.
+     *                                   1 for GRAY (0-255). Read it with {@see toArray()}.
      */
-    private function __construct(public readonly string $model, public readonly array $channels)
+    private function __construct(public readonly string $model, private readonly array $channels)
     {
     }
 

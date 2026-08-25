@@ -35,6 +35,7 @@ use Nadar\PdfGenerator\ImageBox;
 use Nadar\PdfGenerator\Layout;
 use Nadar\PdfGenerator\Overflow;
 use Nadar\PdfGenerator\PdfGenerator;
+use Nadar\PdfGenerator\QrBox;
 use Nadar\PdfGenerator\Support\FontCompiler;
 use Nadar\PdfGenerator\TextBox;
 use Nadar\PdfGenerator\Value\Color;
@@ -151,22 +152,15 @@ final class Poster
 
     private const ROWS_PER_PAGE = 6;
 
-    /** Measured once off the design; every row is this pitch below the previous. */
+    /** Measured once off the design; every row sits this far below the previous. */
     private const ROW_PITCH = 40.3;
 
-    private const IMAGE_CX = 30.34;
-
-    private const IMAGE_CY = 68.3;
-
-    private const IMAGE_DIAMETER = 30.85;
-
-    private const QR_X = 179.0;
-
-    private const QR_Y = 58.63;
-
-    private const QR_SIZE = 19.5;
-
-    /** The text geometry of one row, as measured off the reference. */
+    /**
+     * One row's complete geometry - text, photo and code together.
+     *
+     * Because every slot lives in the same Layout, repeat() shifts all of them
+     * and the render loop below contains no offset arithmetic at all.
+     */
     private readonly Layout $row;
 
     public function __construct(private readonly PdfGenerator $pdf)
@@ -185,7 +179,13 @@ final class Poster
                 'font' => 'bold', 'size' => 19,
                 'maxLines' => 1, 'minSize' => 11.0,
             ],
-        ]);
+        ])->with(
+            // The placeholder colour is the designed missing-image state.
+            ImageBox::circle('photo', cx: 30.34, cy: 68.3, diameter: 30.85, placeholder: Color::hex(ACCENT)),
+            // Transparent background and no quiet zone are the defaults, so the
+            // code sits on the artwork at exactly the measured size.
+            new QrBox('link', x: 179.0, y: 58.63, size: 19.5, color: Color::hex(BRAND), level: EccLevel::M),
+        );
     }
 
     /** @param list<array{title:string,meta:string,image:?string,url:?string}> $events */
@@ -201,23 +201,17 @@ final class Poster
             );
 
             foreach ($page as $index => $event) {
-                $offset = $index * self::ROW_PITCH;
+                $slots = $rows[$index];
 
-                $this->pdf->writeAll($rows[$index], $event);
-                $this->image($event['image'], self::IMAGE_CY + $offset);
+                // Text slots; the image and code slots in the same layout are skipped.
+                $this->pdf->writeAll($slots, $event);
+
+                // The placeholder circle is painted first when the source is
+                // missing, and the callback then labels it - no manual redraw.
+                $this->pdf->image($slots->image('photo'), $event['image'], $this->label(...));
 
                 if ($event['url'] !== null) {
-                    // Transparent background and no quiet zone are the defaults,
-                    // so the code sits on the artwork instead of punching a white
-                    // tile through it, at exactly the measured size.
-                    $this->pdf->qr(
-                        $event['url'],
-                        x: self::QR_X,
-                        y: self::QR_Y + $offset,
-                        size: self::QR_SIZE,
-                        color: Color::hex(BRAND),
-                        level: EccLevel::M,
-                    );
+                    $this->pdf->qr($slots->qr('link'), $event['url']);
                 }
             }
         }
@@ -226,34 +220,12 @@ final class Poster
     }
 
     /**
-     * Cover-crops the image into a circle.
+     * Labels the placeholder circle, mirroring the "Bild" circle in the design.
      *
-     * The placeholder is a designed state, not an accident: a CDN image failing
-     * in production renders the same accent circle the design specifies. If the
-     * network is unavailable when you run this, that is the path you will see.
+     * Only the word: ImageBox::$placeholder has already filled the shape.
      */
-    private function image(?string $source, float $centerY): void
+    private function label(ImageBox $box): void
     {
-        $this->pdf->image(
-            ImageBox::circle(
-                'photo',
-                cx: self::IMAGE_CX,
-                cy: $centerY,
-                diameter: self::IMAGE_DIAMETER,
-                placeholder: Color::hex(ACCENT),
-            ),
-            $source,
-            // Label the placeholder, mirroring the "Bild" circle in the design.
-            fn (ImageBox $box) => $this->placeholder($box),
-        );
-    }
-
-    private function placeholder(ImageBox $box): void
-    {
-        $this->pdf->raw()->Ellipse(
-            ...[...$box->bounds()->center(), $box->w / 2, $box->h / 2, 0, 0, 360, 'F', [], Color::hex(ACCENT)->toArray()]
-        );
-
         $this->pdf->write(
             new TextBox(
                 'image_label',

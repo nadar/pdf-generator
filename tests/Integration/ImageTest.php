@@ -76,14 +76,14 @@ final class ImageTest extends IntegrationTestCase
         self::assertFalse(self::hasEmbeddedImage($pdf->bytes()));
     }
 
-    public function testOnMissingCallbackTakesPrecedence(): void
+    public function testOnMissingIsCalled(): void
     {
         $pdf = $this->pdf();
         $pdf->page(null, 'A4');
 
         $called = null;
         $pdf->image(
-            ImageBox::circle('avatar', cx: 35, cy: 35, diameter: 30, placeholder: Color::hex('#ff920c')),
+            new ImageBox('avatar', 10, 10, 30, 30),
             null,
             function (ImageBox $box) use (&$called): void {
                 $called = $box->id;
@@ -91,6 +91,41 @@ final class ImageTest extends IntegrationTestCase
         );
 
         self::assertSame('avatar', $called);
+    }
+
+    /**
+     * "Coloured shape with a label on top" is the common designed fallback, so
+     * the placeholder must be painted *and* the callback run - not one or the
+     * other, which would force the callback to redraw the shape by hand.
+     */
+    public function testPlaceholderAndOnMissingCompose(): void
+    {
+        $pdf = $this->pdf();
+        $pdf->page(null, 'A4');
+
+        $pdf->image(
+            ImageBox::circle('avatar', cx: 35, cy: 35, diameter: 30, placeholder: Color::hex('#ff920c')),
+            null,
+            function (ImageBox $box) use ($pdf): void {
+                $pdf->writeText($box->x, $box->y + $box->h / 2, $box->w, 'Image');
+            }
+        );
+        $bytes = $pdf->bytes();
+
+        self::assertStringContainsString('1.000000 0.572549 0.047059 rg', $bytes, 'the placeholder is filled');
+        self::assertContains('Image', self::drawnText($bytes), 'and the callback drew on top of it');
+    }
+
+    /** The fill a placeholder performs, reachable without raw(). */
+    public function testFillShapeIsPubliclyAvailable(): void
+    {
+        $pdf = $this->pdf();
+        $pdf->page(null, 'A4');
+
+        $result = $pdf->fillShape(ImageBox::circle('badge', cx: 35, cy: 35, diameter: 30), Color::hex('#223764'));
+
+        self::assertSame($pdf, $result);
+        self::assertStringContainsString('0.133333 0.215686 0.392157 rg', $pdf->bytes());
     }
 
     public function testMissingSourceWithoutAFallbackThrowsAndNamesTheBox(): void

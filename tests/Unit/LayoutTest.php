@@ -29,7 +29,7 @@ final class LayoutTest extends TestCase
             'font' => 'bold', 'size' => 12, 'align' => 'center', 'color' => '#223764',
             'overflow' => 'shrink-then-clip', 'rotation' => 90, 'minSize' => 8,
             'html' => true, 'anchor' => 'baseline', 'maxLines' => 2,
-        ]])->get('x');
+        ]])->text('x');
 
         self::assertSame(Align::Center, $box->align);
         self::assertSame(Anchor::Baseline, $box->anchor);
@@ -52,9 +52,9 @@ final class LayoutTest extends TestCase
     {
         $shifted = self::rowLayout()->offset(5.0, 10.0);
 
-        self::assertSame(25.0, $shifted->get('title')->x);
-        self::assertSame(30.0, $shifted->get('title')->y);
-        self::assertSame(80.0, $shifted->get('meta')->y);
+        self::assertSame(25.0, $shifted->text('title')->x);
+        self::assertSame(30.0, $shifted->text('title')->y);
+        self::assertSame(80.0, $shifted->text('meta')->y);
     }
 
     /** The declarative form of the "n identical slots" pattern. */
@@ -64,20 +64,20 @@ final class LayoutTest extends TestCase
 
         self::assertCount(6, $rows);
         // the first copy is the layout itself, unshifted
-        self::assertSame(20.0, $rows[0]->get('title')->y);
-        self::assertSame(60.3, $rows[1]->get('title')->y);
-        self::assertEqualsWithDelta(221.5, $rows[5]->get('title')->y, 0.0001);
+        self::assertSame(20.0, $rows[0]->text('title')->y);
+        self::assertSame(60.3, $rows[1]->text('title')->y);
+        self::assertEqualsWithDelta(221.5, $rows[5]->text('title')->y, 0.0001);
         // horizontal pitch stays untouched
-        self::assertSame(20.0, $rows[5]->get('title')->x);
+        self::assertSame(20.0, $rows[5]->text('title')->x);
     }
 
     public function testRepeatSupportsColumnGrids(): void
     {
         $columns = self::rowLayout()->repeat(times: 3, dx: 60.0);
 
-        self::assertSame(20.0, $columns[0]->get('title')->x);
-        self::assertSame(140.0, $columns[2]->get('title')->x);
-        self::assertSame(20.0, $columns[2]->get('title')->y);
+        self::assertSame(20.0, $columns[0]->text('title')->x);
+        self::assertSame(140.0, $columns[2]->text('title')->x);
+        self::assertSame(20.0, $columns[2]->text('title')->y);
     }
 
     public function testRepeatRejectsZeroTimes(): void
@@ -93,8 +93,8 @@ final class LayoutTest extends TestCase
 
         self::assertSame(['a'], $layout->ids());
         self::assertSame(['a', 'b'], $extended->ids());
-        self::assertSame(9.0, $extended->get('a')->x, 'same id replaces the slot');
-        self::assertSame(1.0, $layout->get('a')->x, 'the original is untouched');
+        self::assertSame(9.0, $extended->text('a')->x, 'same id replaces the slot');
+        self::assertSame(1.0, $layout->text('a')->x, 'the original is untouched');
     }
 
     public function testIsIterableAsSlotIdToBox(): void
