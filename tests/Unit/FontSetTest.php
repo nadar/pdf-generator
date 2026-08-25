@@ -110,6 +110,48 @@ final class FontSetTest extends TestCase
         self::assertSame('brother/medium', $faces['brothermedium|']->label());
     }
 
+    /**
+     * Core fonts are the only way to get a real bold face without a font
+     * binary, which keeps examples and tests runnable out of the box.
+     */
+    public function testCoreFamilyRegistersStylesThatNeedNoCompilation(): void
+    {
+        $set = FontSet::make()
+            ->coreFamily('helvetica')
+            ->role('regular', 'helvetica')
+            ->role('bold', 'helvetica', 'bold');
+
+        self::assertSame(['regular', 'bold', 'italic', 'bolditalic'], $set->weights('helvetica'));
+        self::assertSame('B', $set->roleOrDefault('bold')->style);
+
+        foreach ($set->faces() as $face) {
+            self::assertTrue($face->core, $face->label());
+            self::assertSame('', $face->file);
+        }
+    }
+
+    public function testCoreFamilyRejectsUnknownFonts(): void
+    {
+        $this->expectException(\Nadar\PdfGenerator\Exception\FontException::class);
+        $this->expectExceptionMessageMatches('/Unknown core font "inter".*helvetica/s');
+        FontSet::make()->coreFamily('inter');
+    }
+
+    public function testSymbolFontsOnlyOfferRegular(): void
+    {
+        self::assertSame(['regular'], FontSet::make()->coreFamily('zapfdingbats')->weights('zapfdingbats'));
+    }
+
+    public function testEmbeddedFacesAreNotMarkedCore(): void
+    {
+        $faces = FontSet::make()->family('inter', 'Inter-Regular.ttf')->faces();
+        $face = reset($faces);
+
+        self::assertNotFalse($face);
+        self::assertFalse($face->core);
+        self::assertSame('Inter-Regular.ttf', $face->file);
+    }
+
     #[\PHPUnit\Framework\Attributes\DataProvider('weightAliases')]
     public function testWeightNormalization(string $input, string $expected): void
     {

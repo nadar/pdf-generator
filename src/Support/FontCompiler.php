@@ -82,6 +82,11 @@ final class FontCompiler
         $outPath = self::normalizePath($outPath);
         self::ensureWritableDirectory($outPath);
 
+        // TCPDF opens its output through a "file://" wrapper, which cannot
+        // resolve a relative path, so hand it an absolute one.
+        $outPath = self::normalizePath(self::absolutePath($outPath));
+        $font = self::absolutePath($font);
+
         $expectedKey = self::keyFor(basename($font));
         $expectedFile = $outPath . $expectedKey . '.php';
 
@@ -317,6 +322,19 @@ final class FontCompiler
         }
 
         return 'TrueTypeUnicode';
+    }
+
+    /**
+     * Resolve a path against the current working directory.
+     *
+     * Falls back to the input when the path cannot be resolved, so the caller
+     * still gets a usable error message naming what they passed.
+     */
+    private static function absolutePath(string $path): string
+    {
+        $resolved = realpath($path);
+
+        return $resolved === false ? $path : $resolved;
     }
 
     private static function ensureWritableDirectory(string $path): void

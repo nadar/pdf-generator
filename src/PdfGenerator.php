@@ -344,16 +344,7 @@ final class PdfGenerator
      */
     public function write(TextBox $box, string $text): static
     {
-        $overflow = $box->overflow ?? $this->settings->overflow();
-
-        if ($box->h === null && $overflow !== Overflow::None) {
-            throw new OverflowException(sprintf(
-                'TextBox "%s" declares overflow policy %s but no height; there is nothing to overflow. '
-                . 'Give it an "h", or use Overflow::None.',
-                $box->id,
-                $overflow->name
-            ));
-        }
+        $overflow = $this->effectiveOverflow($box);
 
         $text = Text::normalize($text);
         $this->selectFont($box->font, $box->size);
@@ -404,7 +395,7 @@ final class PdfGenerator
         $size = (float) $this->pdf->getFontSizePt();
 
         try {
-            $overflow = $box->overflow ?? $this->settings->overflow();
+            $overflow = $this->effectiveOverflow($box);
             $probeText = Text::normalize($text);
 
             $this->selectFont($box->font, $box->size);
@@ -922,6 +913,34 @@ final class PdfGenerator
         }
 
         return $this;
+    }
+
+    /**
+     * The policy that actually applies to a box.
+     *
+     * A policy declared *on the box* with no height is a mistake worth
+     * reporting - there is nothing for it to act on. The settings' default is
+     * different: it exists so height-constrained slots do not each have to
+     * repeat it, and must not make every heightless box an error.
+     *
+     * @throws OverflowException when the box itself declares a policy but no height
+     */
+    private function effectiveOverflow(TextBox $box): Overflow
+    {
+        if ($box->h !== null) {
+            return $box->overflow ?? $this->settings->overflow();
+        }
+
+        if ($box->overflow !== null && $box->overflow !== Overflow::None) {
+            throw new OverflowException(sprintf(
+                'TextBox "%s" declares overflow policy %s but no height; there is nothing to overflow. '
+                . 'Give it an "h", or drop the policy.',
+                $box->id,
+                $box->overflow->name
+            ));
+        }
+
+        return Overflow::None;
     }
 
     private function applyPageDefaults(): void

@@ -14,6 +14,8 @@ final class FontFace
      * @param string $cacheKey     TCPDF font key / definition basename, e.g. `brother1816medium`
      * @param string $tcpdfFamily  family TCPDF is asked for, e.g. `brothermedium`
      * @param string $tcpdfStyle   `''`, `B`, `I` or `BI`
+     * @param bool   $core         a TCPDF built-in font, which needs no compiled
+     *                             definition and is therefore not embedded
      */
     public function __construct(
         public readonly string $family,
@@ -21,7 +23,8 @@ final class FontFace
         public readonly string $file,
         public readonly string $cacheKey,
         public readonly string $tcpdfFamily,
-        public readonly string $tcpdfStyle
+        public readonly string $tcpdfStyle,
+        public readonly bool $core = false
     ) {
     }
 

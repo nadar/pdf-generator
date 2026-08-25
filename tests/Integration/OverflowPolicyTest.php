@@ -112,8 +112,8 @@ final class OverflowPolicyTest extends IntegrationTestCase
         );
     }
 
-    /** A policy with nothing to constrain it is a configuration mistake, not a no-op. */
-    public function testPolicyWithoutHeightIsRejected(): void
+    /** A policy on the box with nothing to constrain it is a configuration mistake. */
+    public function testPolicyOnTheBoxWithoutHeightIsRejected(): void
     {
         $pdf = $this->pdf();
         $pdf->page(null, 'A4');
@@ -121,6 +121,23 @@ final class OverflowPolicyTest extends IntegrationTestCase
         $this->expectException(OverflowException::class);
         $this->expectExceptionMessageMatches('/declares overflow policy Shrink but no height/');
         $pdf->write(new TextBox('t', 20, 20, 120, overflow: Overflow::Shrink), 'x');
+    }
+
+    /**
+     * The settings' default must not turn every heightless box into an error -
+     * it exists so height-constrained slots need not repeat it.
+     */
+    public function testSettingsDefaultDoesNotRequireEveryBoxToHaveAHeight(): void
+    {
+        $pdf = $this->pdf(overflow: Overflow::ShrinkThenClip);
+        $pdf->page(null, 'A4');
+
+        $pdf->write(new TextBox('headline', 20, 20, 170, size: 35.0), 'Event Highlights');
+        $metrics = $pdf->lastMetrics();
+
+        self::assertNotNull($metrics);
+        self::assertSame(Overflow::None, $metrics->overflow);
+        self::assertEqualsWithDelta(35.0, $metrics->size, 0.001, 'nothing constrains it, so nothing shrinks');
     }
 
     public function testSettingsSupplyTheDefaultPolicy(): void

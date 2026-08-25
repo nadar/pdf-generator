@@ -2,6 +2,7 @@
 
 namespace Nadar\PdfGenerator\Font;
 
+use Nadar\PdfGenerator\Exception\FontException;
 use Nadar\PdfGenerator\Exception\MissingFontStyleException;
 use Nadar\PdfGenerator\Support\FontCompiler;
 
@@ -29,6 +30,19 @@ use Nadar\PdfGenerator\Support\FontCompiler;
  */
 final class FontSet
 {
+    /**
+     * TCPDF's built-in fonts and the weights each provides.
+     *
+     * @var array<string,list<string>>
+     */
+    private const CORE_FONTS = [
+        'courier' => [FontWeight::REGULAR, FontWeight::BOLD, FontWeight::ITALIC, FontWeight::BOLD_ITALIC],
+        'helvetica' => [FontWeight::REGULAR, FontWeight::BOLD, FontWeight::ITALIC, FontWeight::BOLD_ITALIC],
+        'times' => [FontWeight::REGULAR, FontWeight::BOLD, FontWeight::ITALIC, FontWeight::BOLD_ITALIC],
+        'symbol' => [FontWeight::REGULAR],
+        'zapfdingbats' => [FontWeight::REGULAR],
+    ];
+
     /** @var array<string,array<string,FontFace>> logical family => canonical weight => face */
     private array $families = [];
 
@@ -83,6 +97,44 @@ final class FontSet
 
         $this->families[$family][$weight] = $face;
         $this->byTcpdf[$tcpdfFamily . '|' . $tcpdfStyle] = $face;
+
+        return $this;
+    }
+
+    /**
+     * Register one of TCPDF's built-in fonts as a family.
+     *
+     * Core fonts need no compilation and are not embedded, which makes them the
+     * right choice for throwaway scripts, tests and examples - and the only way
+     * to get a real bold face without a font binary. They are metrically
+     * standard rather than brand-accurate, so production print work should use
+     * {@see family()} or {@see face()} with real files.
+     *
+     * @param string $family one of courier, helvetica, times (which have all four
+     *                       styles), or symbol / zapfdingbats (regular only)
+     *
+     * @throws \Nadar\PdfGenerator\Exception\FontException on an unknown core font
+     */
+    public function coreFamily(string $family = 'helvetica'): self
+    {
+        $family = strtolower($family);
+        $weights = self::CORE_FONTS[$family] ?? null;
+
+        if ($weights === null) {
+            throw new FontException(sprintf(
+                'Unknown core font "%s". TCPDF ships: %s.',
+                $family,
+                implode(', ', array_keys(self::CORE_FONTS))
+            ));
+        }
+
+        foreach ($weights as $weight) {
+            [$tcpdfFamily, $tcpdfStyle] = FontWeight::toTcpdf($family, $weight);
+            $face = new FontFace($family, $weight, '', $family . strtolower($tcpdfStyle), $tcpdfFamily, $tcpdfStyle, true);
+
+            $this->families[$family][$weight] = $face;
+            $this->byTcpdf[$tcpdfFamily . '|' . $tcpdfStyle] = $face;
+        }
 
         return $this;
     }

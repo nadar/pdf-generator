@@ -41,6 +41,19 @@ final class FontRegistry
             return;
         }
 
+        $embedded = array_filter($faces, static fn (FontFace $face): bool => !$face->core);
+
+        foreach ($faces as $face) {
+            // Core fonts are resolved by TCPDF itself; nothing to compile or embed.
+            if ($face->core) {
+                $pdf->AddFont($face->tcpdfFamily, $face->tcpdfStyle);
+            }
+        }
+
+        if ($embedded === []) {
+            return;
+        }
+
         if (!is_dir($this->fontPath)) {
             throw new FontException(sprintf(
                 'Font path "%s" does not exist. It must hold the font sources listed in fonts().',
@@ -56,7 +69,7 @@ final class FontRegistry
             ));
         }
 
-        foreach ($faces as $face) {
+        foreach ($embedded as $face) {
             $cache = FontCompiler::cacheFile($this->cachePath, $face->cacheKey);
 
             if (!is_file($cache)) {

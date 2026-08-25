@@ -70,6 +70,27 @@ final class FontCompileTest extends IntegrationTestCase
         self::assertFileExists($withoutSlash . '/' . $b . '.php');
     }
 
+    /**
+     * TCPDF opens its output through a "file://" wrapper, which cannot resolve a
+     * relative path - so `--cache=examples/assets/fonts/cache` used to die inside
+     * TCPDF with "Remote host file access not supported".
+     */
+    public function testRelativeCachePathWorks(): void
+    {
+        $previous = getcwd();
+        self::assertNotFalse($previous);
+
+        try {
+            chdir($this->workspace);
+
+            $key = FontCompiler::compile($this->source, 'nested/cache');
+
+            self::assertFileExists($this->workspace . '/nested/cache/' . $key . '.php');
+        } finally {
+            chdir($previous);
+        }
+    }
+
     /** The key the build writes must be the key the registry looks for. */
     public function testCompiledKeyMatchesKeyFor(): void
     {

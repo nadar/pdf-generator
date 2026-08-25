@@ -3,7 +3,10 @@
 declare(strict_types=1);
 
 use Nadar\PdfGenerator\AbstractPdfSettings;
+use Nadar\PdfGenerator\Align;
 use Nadar\PdfGenerator\Font\FontSet;
+use Nadar\PdfGenerator\Layout;
+use Nadar\PdfGenerator\Overflow;
 use Nadar\PdfGenerator\PdfGenerator;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -25,9 +28,19 @@ final class EventsPaginationSettings extends AbstractPdfSettings
         return __DIR__;
     }
 
+    /** Core fonts need no compilation, so this example needs no assets. */
     public function fonts(): FontSet
     {
-        return FontSet::make();
+        return FontSet::make()
+            ->coreFamily('helvetica')
+            ->role('regular', 'helvetica')
+            ->role('bold', 'helvetica', 'bold');
+    }
+
+    /** Row content is generated, so clip rather than throw on a long value. */
+    public function overflow(): Overflow
+    {
+        return Overflow::ShrinkThenClip;
     }
 }
 
@@ -53,31 +66,35 @@ $settings = new EventsPaginationSettings();
 $pdf = (new PdfGenerator($settings))->title('Events list');
 
 $events = buildEvents(180);
-$lineHeight = 6.0;
-$top = 15.0;
-$left = 15.0;
-$y = $top;
-$page = 0;
 
-$startPage = static function () use (&$pdf, &$page, &$y, $top, $left): void {
-    ++$page;
-    $y = $top;
+const ROW_PITCH = 6.0;
+const ROWS_PER_PAGE = 44;
+const TOP = 25.0;
+const LEFT = 15.0;
+
+/*
+ * One row's geometry, declared once. repeat() turns it into the page's rows,
+ * which keeps the "$index * $pitch" arithmetic out of the render loop.
+ */
+$rowLayout = Layout::fromArray([
+    ['id' => 'date', 'x' => LEFT, 'y' => TOP, 'w' => 45, 'h' => ROW_PITCH, 'size' => 9],
+    ['id' => 'title', 'x' => LEFT + 48, 'y' => TOP, 'w' => 80, 'h' => ROW_PITCH, 'size' => 9],
+    ['id' => 'location', 'x' => LEFT + 130, 'y' => TOP, 'w' => 50, 'h' => ROW_PITCH, 'size' => 9, 'align' => 'right'],
+]);
+
+$rows = $rowLayout->repeat(times: ROWS_PER_PAGE, dy: ROW_PITCH);
+$pages = array_chunk($events, ROWS_PER_PAGE);
+
+foreach ($pages as $number => $page) {
     $pdf->page();
-    $pdf->writeText($left, $y, 180, sprintf('Event list (page %d)', $page), 6, null, 12);
-    $y += 8;
-};
+    $pdf->writeText(LEFT, 12, 180, sprintf('Event list - page %d of %d', $number + 1, count($pages)), 8, 'bold', 14);
+    $pdf->writeText(LEFT, 19, 180, sprintf('%d events', count($events)), 6, null, 9);
 
-$startPage();
-
-foreach ($events as $event) {
-    if ($y >= 285) {
-        $startPage();
+    foreach ($page as $index => $event) {
+        $pdf->writeAll($rows[$index], $event);
     }
 
-    $pdf->writeText($left, $y, 45, $event['date'], $lineHeight);
-    $pdf->writeText($left + 48, $y, 80, $event['title'], $lineHeight);
-    $pdf->writeText($left + 130, $y, 50, $event['location'], $lineHeight);
-    $y += $lineHeight;
+    $pdf->writeText(LEFT, 288, 180, sprintf('%d / %d', $number + 1, count($pages)), 6, null, 8, Align::Center);
 }
 
 $output = __DIR__ . '/output/events-pagination.pdf';

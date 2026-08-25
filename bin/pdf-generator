@@ -159,23 +159,50 @@ switch ($command) {
             $cacheDir ??= $settings->fontCachePath();
         }
 
-        $resolvedCache = FontCompiler::normalizePath($cacheDir);
-        fwrite(STDOUT, sprintf("sources: %s\ncache:   %s\n\n", realpath($fontsDir) ?: $fontsDir, $resolvedCache));
+        $warnings = [];
 
         try {
             $compiled = FontCompiler::compileDirectory(
                 $fontsDir,
                 $cacheDir,
                 $force,
-                static fn (string $notice): int|false => fwrite(STDOUT, 'warning: ' . $notice . "\n")
+                static function (string $notice) use (&$warnings): void {
+                    $warnings[] = $notice;
+                }
             );
         } catch (FontException $exception) {
             fwrite(STDERR, 'error: ' . $exception->getMessage() . "\n");
             exit(1);
         }
 
+        /*
+         * Resolved after the build, because the cache directory may not have
+         * existed before it. Absolute paths are the point: they make a
+         * misconfigured cache location visible here rather than at first render.
+         */
+        $resolvedCache = realpath($cacheDir) ?: $cacheDir;
+
+        fwrite(STDOUT, sprintf(
+            "sources: %s\ncache:   %s\n\n",
+            realpath($fontsDir) ?: $fontsDir,
+            FontCompiler::normalizePath($resolvedCache)
+        ));
+
+        foreach ($warnings as $warning) {
+            fwrite(STDOUT, 'warning: ' . $warning . "\n");
+        }
+
+        if ($warnings !== []) {
+            fwrite(STDOUT, "\n");
+        }
+
         foreach ($compiled as $file => $key) {
-            fwrite(STDOUT, sprintf("compiled %s -> %s\n         %s\n", $file, $key, FontCompiler::cacheFile($cacheDir, $key)));
+            fwrite(STDOUT, sprintf(
+                "compiled %s -> %s\n         %s\n",
+                $file,
+                $key,
+                FontCompiler::cacheFile($resolvedCache, $key)
+            ));
         }
 
         fwrite(STDOUT, sprintf("\n%d face(s) compiled.\n", count($compiled)));
@@ -195,10 +222,14 @@ switch ($command) {
 
         $failed = false;
         foreach ($faces as $face) {
-            $cacheFile = FontCompiler::cacheFile($cacheDir, $face->cacheKey);
-            $ok = is_file($cacheFile);
+            if ($face->core) {
+                fwrite(STDOUT, sprintf("%-18s %-28s -> %-24s [core]\n", $face->label(), '(built into TCPDF)', $face->cacheKey));
+                continue;
+            }
+
+            $ok = is_file(FontCompiler::cacheFile($cacheDir, $face->cacheKey));
             fwrite(STDOUT, sprintf(
-                "%-14s %-28s -> %-24s [%s]\n",
+                "%-18s %-28s -> %-24s [%s]\n",
                 $face->label(),
                 $face->file,
                 $face->cacheKey,
