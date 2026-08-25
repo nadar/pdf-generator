@@ -206,17 +206,6 @@ final class FontSet
         return new FontRole($face->tcpdfFamily, $face->tcpdfStyle, $face->family, $face->weight);
     }
 
-    /** @return array<string,FontRole> every named role */
-    public function roles(): array
-    {
-        return $this->roles;
-    }
-
-    public function hasRole(string $name): bool
-    {
-        return isset($this->roles[$name]);
-    }
-
     /** @return list<string> logical family names, in registration order */
     public function familyNames(): array
     {
@@ -227,12 +216,6 @@ final class FontSet
     public function weights(string $family): array
     {
         return array_keys($this->families[$family] ?? []);
-    }
-
-    /** Whether a logical family has a face for this weight. */
-    public function supportsWeight(string $family, string $weight): bool
-    {
-        return isset($this->families[$family][FontWeight::normalize($weight)]);
     }
 
     /**
@@ -250,12 +233,6 @@ final class FontSet
     public function cacheKey(string $tcpdfFamily, string $style): ?string
     {
         return ($this->byTcpdf[$tcpdfFamily . '|' . strtoupper($style)] ?? null)?->cacheKey;
-    }
-
-    /** The face behind a TCPDF family/style pair, or `null` when unregistered. */
-    public function faceFor(string $tcpdfFamily, string $style): ?FontFace
-    {
-        return $this->byTcpdf[$tcpdfFamily . '|' . strtoupper($style)] ?? null;
     }
 
     private function missingFaceMessage(string $role, string $family, string $weight): string

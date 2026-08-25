@@ -47,12 +47,6 @@ final class FontWeight
         };
     }
 
-    /** Whether this weight maps onto a TCPDF style rather than its own family. */
-    public static function isCanonical(string $weight): bool
-    {
-        return array_key_exists(self::normalize($weight), self::CANONICAL);
-    }
-
     /**
      * The TCPDF family/style pair a logical family plus weight resolves to.
      *
@@ -81,11 +75,5 @@ final class FontWeight
             self::BOLD_ITALIC => 'BoldItalic',
             default => ucfirst($weight),
         };
-    }
-
-    /** Canonical weight for a bare TCPDF style code. */
-    public static function fromStyle(string $style): string
-    {
-        return self::normalize($style);
     }
 }

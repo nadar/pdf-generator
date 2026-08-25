@@ -28,12 +28,6 @@ final class FontFace
     ) {
     }
 
-    /** Backwards-compatible alias for {@see $file}. */
-    public function ttfFile(): string
-    {
-        return $this->file;
-    }
-
     /** `family/weight`, for error messages and CLI output. */
     public function label(): string
     {

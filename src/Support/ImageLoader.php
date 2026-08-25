@@ -57,25 +57,6 @@ final class ImageLoader
         }
     }
 
-    /**
-     * Resolve a source, or `null` when it cannot be read.
-     *
-     * The non-throwing variant, for callers that have a placeholder to fall
-     * back to.
-     */
-    public function tryLoad(?string $source): ?ImageSource
-    {
-        if ($source === null || trim($source) === '') {
-            return null;
-        }
-
-        try {
-            return $this->load($source);
-        } catch (MissingImageException) {
-            return null;
-        }
-    }
-
     /** Whether a source is remote rather than a local path. */
     public static function isRemote(string $source): bool
     {
@@ -116,6 +97,7 @@ final class ImageLoader
 
     private function resolveRemote(string $url): ImageSource
     {
+        // PHP's "http" wrapper serves https:// too, so its options cover both.
         $context = stream_context_create([
             'http' => [
                 'timeout' => $this->timeout,
@@ -123,9 +105,6 @@ final class ImageLoader
                 'max_redirects' => max(1, $this->maxRedirects),
                 'ignore_errors' => false,
                 'user_agent' => 'nadar/pdf-generator',
-            ],
-            'https' => [
-                'timeout' => $this->timeout,
             ],
         ]);
 

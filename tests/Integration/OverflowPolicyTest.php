@@ -3,6 +3,7 @@
 namespace Nadar\PdfGenerator\Tests\Integration;
 
 use Nadar\PdfGenerator\Exception\OverflowException;
+use Nadar\PdfGenerator\Font\FontSet;
 use Nadar\PdfGenerator\Overflow;
 use Nadar\PdfGenerator\TextBox;
 
@@ -105,7 +106,7 @@ final class OverflowPolicyTest extends IntegrationTestCase
         $pdf->page(null, 'A4');
 
         $this->expectException(OverflowException::class);
-        $this->expectExceptionMessageMatches('/could not reach 1 line\(s\).*or maxLines/s');
+        $this->expectExceptionMessageMatches('/could not reach 1 line\(s\).*or raise maxLines/s');
         $pdf->write(
             new TextBox('t', 20, 20, 120, 11.5, size: 24.0, overflow: Overflow::Shrink, maxLines: 1),
             self::LONG
@@ -113,14 +114,47 @@ final class OverflowPolicyTest extends IntegrationTestCase
     }
 
     /** A policy on the box with nothing to constrain it is a configuration mistake. */
-    public function testPolicyOnTheBoxWithoutHeightIsRejected(): void
+    public function testPolicyOnTheBoxWithNoConstraintIsRejected(): void
     {
         $pdf = $this->pdf();
         $pdf->page(null, 'A4');
 
         $this->expectException(OverflowException::class);
-        $this->expectExceptionMessageMatches('/declares overflow policy Shrink but no height/');
+        $this->expectExceptionMessageMatches('/neither a height nor maxLines/');
         $pdf->write(new TextBox('t', 20, 20, 120, overflow: Overflow::Shrink), 'x');
+    }
+
+    /**
+     * maxLines is a constraint in its own right: "keep this on one line" needs
+     * no height, and used to be a silent no-op without one.
+     */
+    public function testMaxLinesShrinksWithoutAHeight(): void
+    {
+        $pdf = $this->pdf();
+        $pdf->page(null, 'A4');
+
+        $box = new TextBox('t', 20, 20, 120, size: 24.0, minSize: 8.0, overflow: Overflow::Shrink, maxLines: 1);
+        $metrics = $pdf->probe($box, self::LONG);
+
+        self::assertSame(1, $metrics->lines);
+        self::assertLessThan(24.0, $metrics->size);
+        self::assertGreaterThanOrEqual(8.0, $metrics->size);
+        // with no declared height, the reported box height is the measured one
+        self::assertEqualsWithDelta($metrics->height, $metrics->box->h, 0.0001);
+    }
+
+    /** Shrink still throws when a heightless line cap cannot be met. */
+    public function testUnreachableMaxLinesWithoutAHeightStillThrows(): void
+    {
+        $pdf = $this->pdf();
+        $pdf->page(null, 'A4');
+
+        $this->expectException(OverflowException::class);
+        $this->expectExceptionMessageMatches('/could not reach 1 line\(s\) at sizes/');
+        $pdf->write(
+            new TextBox('t', 20, 20, 25, size: 24.0, overflow: Overflow::Shrink, maxLines: 1),
+            self::LONG
+        );
     }
 
     /**
@@ -149,6 +183,37 @@ final class OverflowPolicyTest extends IntegrationTestCase
         $metrics = $pdf->probe(new TextBox('t', 20, 20, 120, 11.5, size: 24.0), self::LONG);
 
         self::assertLessThan(24.0, $metrics->size);
+    }
+
+    /** Cutting markup at a character offset would break a tag. */
+    public function testMaxLinesDoesNotTruncateHtmlMarkup(): void
+    {
+        // <b> needs a real bold face, so declare one
+        $pdf = $this->pdf(FontSet::make()->coreFamily('helvetica')->role('regular', 'helvetica'));
+        $pdf->page(null, 'A4');
+
+        $html = '<b>A remarkably long event title</b> that will never fit on a single line';
+        $box = new TextBox('t', 20, 20, 120, 11.5, size: 24.0, overflow: Overflow::ShrinkThenClip, html: true, maxLines: 1);
+
+        $pdf->write($box, $html);
+        $drawn = implode(' ', self::drawnText($pdf->bytes()));
+
+        self::assertStringNotContainsString('...', $drawn, 'HTML shrinks and clips rather than being cut');
+        self::assertStringNotContainsString('<', $drawn, 'the markup was rendered, not printed');
+    }
+
+    /** A floor above the requested size must not scale the text up. */
+    public function testMinSizeAboveTheRequestedSizeNeverEnlargesText(): void
+    {
+        $pdf = $this->pdf();
+        $pdf->page(null, 'A4');
+
+        $metrics = $pdf->probe(
+            new TextBox('t', 20, 20, 40, 4.0, size: 10.0, minSize: 40.0, overflow: Overflow::ShrinkThenClip),
+            self::LONG
+        );
+
+        self::assertLessThanOrEqual(10.0, $metrics->size);
     }
 
     public function testNoneLeavesTheTextOverflowing(): void

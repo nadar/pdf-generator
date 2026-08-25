@@ -21,11 +21,14 @@ for the calibration procedure see [`skills/pdf-template-calibration`](skills/pdf
 ## Overflow
 
 7. `h` only takes effect through an `Overflow` policy; without one nothing constrains the text.
+   A policy needs a constraint too - `h`, `maxLines`, or both - and declaring one with neither
+   throws.
 8. `Overflow::Shrink` **throws** when it cannot fit. `ShrinkThenClip` never throws - use it
    for anything data-driven.
 9. Shrinking measures **height**, so wide text wraps before it shrinks. `maxLines: 1` is what
-   expresses "one line, whatever size fits"; surplus words are dropped only once the shrink
-   floor is reached.
+   expresses "one line, whatever size fits", and works with or without an `h`; surplus words
+   are dropped only once the shrink floor is reached - except on an `html` box, where cutting
+   markup would break a tag, so it shrinks and clips instead.
 10. `minSize` defaults to 60% of the requested size, not a fixed point value.
 
 ## Fonts

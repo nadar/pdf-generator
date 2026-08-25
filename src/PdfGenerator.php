@@ -354,7 +354,7 @@ final class PdfGenerator
             $this->assertHtmlStyles($box, $text);
         }
 
-        $resolved = $box->h !== null ? $this->applyOverflow($box, $text, $overflow) : $box;
+        $resolved = $overflow === Overflow::None ? $box : $this->applyOverflow($box, $text, $overflow);
         $renderPolicy = $resolved->overflow ?? $overflow;
         $placed = $this->applyAnchor($resolved);
 
@@ -400,9 +400,9 @@ final class PdfGenerator
 
             $this->selectFont($box->font, $box->size);
 
-            $resolved = $box->h !== null && $overflow !== Overflow::None
-                ? $this->applyOverflow($box, $probeText, $overflow)
-                : $box;
+            $resolved = $overflow === Overflow::None
+                ? $box
+                : $this->applyOverflow($box, $probeText, $overflow);
 
             return $this->metricsFor($box, $this->applyAnchor($resolved), $probeText, $resolved->overflow ?? $overflow);
         } finally {
@@ -918,23 +918,23 @@ final class PdfGenerator
     /**
      * The policy that actually applies to a box.
      *
-     * A policy declared *on the box* with no height is a mistake worth
-     * reporting - there is nothing for it to act on. The settings' default is
-     * different: it exists so height-constrained slots do not each have to
-     * repeat it, and must not make every heightless box an error.
+     * A policy needs something to act on: a height, a line cap, or both. One
+     * declared *on the box* with neither is a mistake worth reporting. The
+     * settings' default is different - it exists so constrained slots do not
+     * each have to repeat it, and must not make every unconstrained box an error.
      *
-     * @throws OverflowException when the box itself declares a policy but no height
+     * @throws OverflowException when the box declares a policy but no constraint
      */
     private function effectiveOverflow(TextBox $box): Overflow
     {
-        if ($box->h !== null) {
+        if ($box->h !== null || $box->maxLines !== null) {
             return $box->overflow ?? $this->settings->overflow();
         }
 
         if ($box->overflow !== null && $box->overflow !== Overflow::None) {
             throw new OverflowException(sprintf(
-                'TextBox "%s" declares overflow policy %s but no height; there is nothing to overflow. '
-                . 'Give it an "h", or drop the policy.',
+                'TextBox "%s" declares overflow policy %s but neither a height nor maxLines; '
+                . 'there is nothing to overflow. Give it an "h", give it maxLines, or drop the policy.',
                 $box->id,
                 $box->overflow->name
             ));
@@ -964,10 +964,15 @@ final class PdfGenerator
             Overflow::Clip, Overflow::None => $box,
         };
 
-        // Shrinking alone cannot always reach the line cap - the floor may be
-        // hit first. Clipping there would leave a sliver of the next line
-        // showing, so drop the surplus words instead.
-        if ($box->maxLines !== null && $overflow !== Overflow::None) {
+        /*
+         * Shrinking alone cannot always reach the line cap - the floor may be
+         * hit first. Clipping there would leave a sliver of the next line
+         * showing, so drop the surplus words instead.
+         *
+         * Not for HTML boxes: cutting markup at a character offset would break
+         * a tag. Those shrink towards the cap and then clip.
+         */
+        if ($box->maxLines !== null && $overflow !== Overflow::None && !$box->html) {
             $text = $this->truncateToLines($text, $resolved, $box->maxLines);
         }
 
@@ -977,7 +982,8 @@ final class PdfGenerator
     private function shrinkToFit(TextBox $box, string $text, bool $allowClip): TextBox
     {
         $originalSize = $this->effectiveSize($box);
-        $floor = $box->minSizeFor($originalSize);
+        // A floor above the requested size would otherwise scale the text up.
+        $floor = min($originalSize, $box->minSizeFor($originalSize));
         $size = $originalSize;
         $iterations = 0;
 
@@ -996,16 +1002,30 @@ final class PdfGenerator
 
         throw new OverflowException(sprintf(
             'Unable to fit text in box "%s": %s at sizes from %.2fpt down to the %.2fpt floor. '
-            . 'Raise the box height%s, lower minSize, or use Overflow::ShrinkThenClip - which clips '
+            . 'Relax the constraint%s, lower minSize, or use Overflow::ShrinkThenClip - which drops '
             . 'the remainder instead of throwing, and is the safer choice when iterating data.',
             $box->id,
-            $box->maxLines !== null
-                ? sprintf('could not reach %d line(s) within %.3fmm', $box->maxLines, (float) $box->h)
-                : sprintf('does not fit %.3fmm', (float) $box->h),
+            $this->unfittableReason($box),
             $originalSize,
             $floor,
-            $box->maxLines !== null ? ' or maxLines' : ''
+            $box->maxLines !== null ? ' or raise maxLines' : ''
         ));
+    }
+
+    /** Which constraint the text could not satisfy, for the failure message. */
+    private function unfittableReason(TextBox $box): string
+    {
+        $parts = [];
+
+        if ($box->maxLines !== null) {
+            $parts[] = sprintf('could not reach %d line(s)', $box->maxLines);
+        }
+
+        if ($box->h !== null) {
+            $parts[] = sprintf('does not fit %.3fmm', $box->h);
+        }
+
+        return $parts === [] ? 'does not fit' : implode(' and ', $parts);
     }
 
     private function truncateToFit(TextBox $box, string &$text): TextBox
@@ -1108,7 +1128,8 @@ final class PdfGenerator
             $ascent,
             $descent,
             $declared->h === null || $height <= $declared->h + 0.0001,
-            $overflow
+            $overflow,
+            $this->capHeightOrNull($role, $size)
         );
     }
 
@@ -1258,6 +1279,14 @@ final class PdfGenerator
         return (float) $this->pdf->getFontDescent($role->family, $role->style, $sizePt);
     }
 
+    /** Cap height when the document class can report it, `null` otherwise. */
+    private function capHeightOrNull(FontRole $role, float $sizePt): ?float
+    {
+        return $this->pdf instanceof MetricsFpdi
+            ? $this->pdf->fontCapHeight($role->family, $role->style, $sizePt)
+            : null;
+    }
+
     private function capHeight(FontRole $role, float $sizePt): float
     {
         if (!$this->pdf instanceof MetricsFpdi) {
@@ -1343,6 +1372,19 @@ final class PdfGenerator
             default => 'Regular',
         };
         $family = $role->logicalFamily !== '' ? $role->logicalFamily : $role->family;
+
+        // Nothing declared at all: the document fell back to TCPDF's default
+        // core font, so pointing at a font file would be misleading.
+        if ($fonts->faces() === []) {
+            throw new MissingFontStyleException(sprintf(
+                'Markup in "%s" needs %s, but fonts() declares no faces, so the document is '
+                . 'using TCPDF\'s default core font. Declare one: ->coreFamily(\'helvetica\') '
+                . 'for a built-in, or ->family(...) for your own files, plus a matching role.',
+                $box->id,
+                $label
+            ));
+        }
+
         $suggestion = sprintf('%s-%s.ttf', ucfirst($family), $label);
 
         throw new MissingFontStyleException(sprintf(

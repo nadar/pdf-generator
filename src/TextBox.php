@@ -50,7 +50,8 @@ final class TextBox
      * @param float        $w        box width in mm; text wraps at this width
      * @param null|float   $h        box height in mm. Only meaningful together with an
      *                               {@see Overflow} policy - without one, nothing constrains
-     *                               the text to it.
+     *                               the text to it. A policy needs either this or
+     *                               {@see $maxLines} to act on.
      * @param null|string  $font     role name from the settings' {@see \Nadar\PdfGenerator\Font\FontSet};
      *                               `null` uses the default role
      * @param null|float   $size     font size in pt; `null` uses the settings' default
@@ -65,7 +66,10 @@ final class TextBox
      * @param Anchor       $anchor   what $y refers to
      * @param null|int     $maxLines cap the line count when shrinking. `maxLines: 1` is the
      *                               "headline must stay on one line, shrink until it does"
-     *                               case that a height alone cannot express.
+     *                               case that a height alone cannot express. Surplus words are
+     *                               dropped only once the shrink floor is reached - except on
+     *                               an `html` box, which shrinks and then clips, since cutting
+     *                               markup at a character offset would break a tag.
      */
     public function __construct(
         public readonly string $id,

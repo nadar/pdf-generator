@@ -27,6 +27,8 @@ final class TextMetrics
      * @param float    $descent   font descent at `size`, in mm (positive)
      * @param bool     $fits      whether the text fit the declared height
      * @param Overflow $overflow  the policy that was applied
+     * @param null|float $capHeight cap height at `size`, in mm; `null` when the
+     *                            document class cannot report it
      */
     public function __construct(
         public readonly Rect $box,
@@ -38,14 +40,21 @@ final class TextMetrics
         public readonly float $ascent,
         public readonly float $descent,
         public readonly bool $fits,
-        public readonly Overflow $overflow
+        public readonly Overflow $overflow,
+        public readonly ?float $capHeight = null
     ) {
     }
 
-    /** Y of the top of the capitals on the first line, in mm. */
-    public function capTop(float $capHeight): float
+    /**
+     * Y of the top of the capitals on the first line, in mm.
+     *
+     * This is the "ink top" a rasterised reference measures, so it is what to
+     * compare against a pixel-measured band. `null` when cap height is
+     * unavailable - see {@see $capHeight}.
+     */
+    public function capTop(): ?float
     {
-        return $this->baseline - $capHeight;
+        return $this->capHeight === null ? null : $this->baseline - $this->capHeight;
     }
 
     /** Baseline of the n-th line (0-based), in mm. */
@@ -57,7 +66,7 @@ final class TextMetrics
     /**
      * Flat representation, handy for logging a calibration run.
      *
-     * @return array{x:float,y:float,w:float,h:float,baseline:float,size:float,lines:int,lineHeight:float,height:float,ascent:float,descent:float,fits:bool,overflow:string}
+     * @return array{x:float,y:float,w:float,h:float,baseline:float,capTop:null|float,size:float,lines:int,lineHeight:float,height:float,ascent:float,descent:float,fits:bool,overflow:string}
      */
     public function toArray(): array
     {
@@ -67,6 +76,7 @@ final class TextMetrics
             'w' => $this->box->w,
             'h' => $this->box->h,
             'baseline' => $this->baseline,
+            'capTop' => $this->capTop(),
             'size' => $this->size,
             'lines' => $this->lines,
             'lineHeight' => $this->lineHeight,

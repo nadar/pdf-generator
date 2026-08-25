@@ -5,9 +5,11 @@ namespace Nadar\PdfGenerator\Tests\Integration;
 use Nadar\PdfGenerator\Align;
 use Nadar\PdfGenerator\Anchor;
 use Nadar\PdfGenerator\Exception\ConfigurationException;
+use Nadar\PdfGenerator\Exception\MissingFontStyleException;
 use Nadar\PdfGenerator\Exception\TemplateNotFoundException;
 use Nadar\PdfGenerator\Exception\TemplateSizeMismatchException;
 use Nadar\PdfGenerator\Exception\UnknownMethodException;
+use Nadar\PdfGenerator\Font\FontSet;
 use Nadar\PdfGenerator\Layout;
 use Nadar\PdfGenerator\PdfGenerator;
 use Nadar\PdfGenerator\Tests\Support\FactorySettings;
@@ -279,7 +281,7 @@ final class DocumentTest extends IntegrationTestCase
         $array = $metrics->toArray();
 
         self::assertSame(
-            ['x', 'y', 'w', 'h', 'baseline', 'size', 'lines', 'lineHeight', 'height', 'ascent', 'descent', 'fits', 'overflow'],
+            ['x', 'y', 'w', 'h', 'baseline', 'capTop', 'size', 'lines', 'lineHeight', 'height', 'ascent', 'descent', 'fits', 'overflow'],
             array_keys($array)
         );
         self::assertEqualsWithDelta(20.0, $array['baseline'], 0.001);
@@ -334,6 +336,32 @@ final class DocumentTest extends IntegrationTestCase
         self::assertSame(1, $pdf->getNumPages());
     }
 
+    /**
+     * Synthetic bold is a silent no-op for embedded subset fonts, so markup
+     * needing a face that is not registered must fail rather than look right in
+     * code and wrong in print.
+     */
+    public function testHtmlBoldWithoutABoldFaceIsRejected(): void
+    {
+        $pdf = $this->pdf(FontSet::make()->coreFamily('helvetica')->role('regular', 'helvetica'));
+        $pdf->page(null, 'A4');
+        $pdf->writeHtml(20, 20, 120, '<b>bold</b>');
+
+        // helvetica does have a bold face, so that one is fine
+        self::assertNotEmpty(self::drawnText($pdf->bytes()));
+    }
+
+    /** With nothing declared, the message must not point at a font file. */
+    public function testHtmlBoldWithNoFontsDeclaredExplainsTheFallback(): void
+    {
+        $pdf = $this->pdf();
+        $pdf->page(null, 'A4');
+
+        $this->expectException(MissingFontStyleException::class);
+        $this->expectExceptionMessageMatches('/declares no faces.*coreFamily/s');
+        $pdf->writeHtml(20, 20, 120, '<b>bold</b>');
+    }
+
     /** The documented reason pdfFactory() exists. */
     public function testPdfFactoryProvidesACustomDocumentClass(): void
     {
@@ -346,6 +374,33 @@ final class DocumentTest extends IntegrationTestCase
         self::assertSame(1, $factory->calls);
         self::assertInstanceOf(HeaderPdf::class, $pdf->raw());
         self::assertContains(HeaderPdf::HEADER_TEXT, self::drawnText($pdf->bytes()));
+    }
+
+    /**
+     * capTop() is the ink top a rasterised reference measures, so it is what a
+     * pixel-measured band should be compared against.
+     */
+    public function testMetricsReportTheInkTop(): void
+    {
+        $pdf = $this->pdf();
+        $pdf->page(null, 'A4');
+        $metrics = $pdf->probe(new TextBox('t', 20, 60.0, 120, size: 24.0, anchor: Anchor::Baseline), 'HXY');
+
+        self::assertNotNull($metrics->capHeight);
+        self::assertGreaterThan(0.0, $metrics->capHeight);
+        self::assertLessThan($metrics->ascent, $metrics->capHeight, 'cap height sits below the ascent');
+        self::assertEqualsWithDelta(60.0 - $metrics->capHeight, $metrics->capTop(), 0.0001);
+    }
+
+    /** Without cap-height support the field is null rather than a guess. */
+    public function testInkTopIsNullOnADocumentClassThatCannotReportIt(): void
+    {
+        $pdf = new PdfGenerator(new FactorySettings($this->workspace, new PlainFpdiFactory()));
+        $pdf->page(null, 'A4');
+        $metrics = $pdf->probe(new TextBox('t', 20, 60.0, 120, size: 24.0), 'HXY');
+
+        self::assertNull($metrics->capHeight);
+        self::assertNull($metrics->capTop());
     }
 
     /** Cap height needs MetricsFpdi; a bare Fpdi must say so rather than guess. */
