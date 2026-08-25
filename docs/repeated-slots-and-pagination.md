@@ -73,6 +73,34 @@ foreach ($pages as $number => $page) {
 }
 ```
 
+## Statically checking an array-defined layout
+
+Layouts written as arrays are convenient but easy to typo. The accepted shape is
+published as a type alias, so a layout kept in a constant or config file can be
+checked by PHPStan:
+
+```php
+use Nadar\PdfGenerator\TextBox;
+
+/**
+ * @phpstan-import-type TextBoxArray from TextBox
+ */
+final class PosterLayout
+{
+    /** @return list<TextBoxArray> */
+    public static function row(): array
+    {
+        return [
+            ['id' => 'title', 'x' => 53.2, 'y' => 58.48, 'w' => 120.0, 'h' => 11.5, 'maxLines' => 1],
+            ['id' => 'meta',  'x' => 53.2, 'y' => 70.11, 'w' => 120.0, 'h' => 9.5,  'maxLines' => 1],
+        ];
+    }
+}
+```
+
+A misspelled key or a wrong value type is then a static error rather than a
+surprise at render time.
+
 ## Slot ids are data keys
 
 `writeAll()` reads each slot's id from the data array, with `-` and `_`

@@ -28,6 +28,24 @@ use Nadar\PdfGenerator\Value\Color;
  *
  * @see PdfGenerator::write()
  * @see PdfGenerator::probe() to read the resolved geometry back
+ *
+ * @phpstan-type TextBoxArray array{
+ *     id?: string,
+ *     x?: float|int|string,
+ *     y?: float|int|string,
+ *     w?: float|int|string,
+ *     h?: float|int|string,
+ *     font?: string,
+ *     size?: float|int|string,
+ *     align?: string,
+ *     color?: string,
+ *     overflow?: string,
+ *     rotation?: float|int|string,
+ *     minSize?: float|int|string,
+ *     html?: bool|int|string,
+ *     anchor?: string,
+ *     maxLines?: float|int|string,
+ * }
  */
 final class TextBox
 {
@@ -101,6 +119,11 @@ final class TextBox
      * Recognised keys: `id`, `x`, `y`, `w`, `h`, `font`, `size`, `align`,
      * `color` (hex), `overflow`, `rotation`, `minSize`, `html`, `anchor`,
      * `maxLines`.
+     *
+     * The accepted shape is published as the `TextBoxArray` type alias: a project
+     * keeping its layouts in constants or config can import it with
+     * `@phpstan-import-type TextBoxArray from \Nadar\PdfGenerator\TextBox` and have
+     * them statically checked.
      *
      * @param array<string,mixed> $row
      *

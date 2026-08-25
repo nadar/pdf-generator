@@ -1309,7 +1309,7 @@ final class PdfGenerator
 
     private function applyColor(Color $color): void
     {
-        $channels = $color->channels;
+        $channels = $color->toArray();
 
         if ($color->model === Color::MODEL_CMYK) {
             $this->pdf->SetTextColorArray([
