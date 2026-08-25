@@ -256,9 +256,9 @@ final class PdfGenerator
     public function measureHtml(string $html, float $w, ?TextBox $box = null): float
     {
         $this->selectFont($box?->font, $box?->size);
-        $x = $box?->x ?? $this->pdf->GetX();
-        $y = $box?->y ?? $this->pdf->GetY();
-        $align = $box?->align ?? 'L';
+        $x = $box !== null ? $box->x : $this->pdf->GetX();
+        $y = $box !== null ? $box->y : $this->pdf->GetY();
+        $align = $box !== null ? $box->align : 'L';
 
         $cacheKey = implode('|', [
             md5($html),

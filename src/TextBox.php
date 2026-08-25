@@ -2,6 +2,7 @@
 
 namespace Nadar\PdfGenerator;
 
+use Nadar\PdfGenerator\Support\Cast;
 use Nadar\PdfGenerator\Value\Color;
 
 final class TextBox
@@ -27,19 +28,19 @@ final class TextBox
     public static function fromArray(array $row): self
     {
         return new self(
-            (string) ($row['id'] ?? ''),
-            (float) ($row['x'] ?? 0),
-            (float) ($row['y'] ?? 0),
-            (float) ($row['w'] ?? 0),
-            isset($row['h']) ? (float) $row['h'] : null,
-            isset($row['font']) ? (string) $row['font'] : null,
-            isset($row['size']) ? (float) $row['size'] : null,
-            isset($row['align']) ? (string) $row['align'] : 'L',
-            isset($row['color']) ? Color::hex((string) $row['color']) : null,
-            isset($row['overflow']) ? Overflow::fromString((string) $row['overflow']) : null,
-            isset($row['rotation']) ? (float) $row['rotation'] : 0.0,
-            isset($row['minSize']) ? (float) $row['minSize'] : 6.0,
-            isset($row['html']) && (bool) $row['html']
+            Cast::toString($row['id'] ?? '', 'id'),
+            Cast::toFloat($row['x'] ?? 0, 'x'),
+            Cast::toFloat($row['y'] ?? 0, 'y'),
+            Cast::toFloat($row['w'] ?? 0, 'w'),
+            isset($row['h']) ? Cast::toFloat($row['h'], 'h') : null,
+            isset($row['font']) ? Cast::toString($row['font'], 'font') : null,
+            isset($row['size']) ? Cast::toFloat($row['size'], 'size') : null,
+            isset($row['align']) ? Cast::toString($row['align'], 'align') : 'L',
+            isset($row['color']) ? Color::hex(Cast::toString($row['color'], 'color')) : null,
+            isset($row['overflow']) ? Overflow::fromString(Cast::toString($row['overflow'], 'overflow')) : null,
+            isset($row['rotation']) ? Cast::toFloat($row['rotation'], 'rotation') : 0.0,
+            isset($row['minSize']) ? Cast::toFloat($row['minSize'], 'minSize') : 6.0,
+            isset($row['html']) && Cast::toBool($row['html'], 'html')
         );
     }
 
