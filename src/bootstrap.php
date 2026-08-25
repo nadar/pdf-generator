@@ -1,5 +1,25 @@
 <?php
 
+/*
+ * TCPDF configuration, applied before TCPDF's own config file can define these.
+ *
+ * Every constant is guarded, so an application that needs different values can
+ * define them earlier (e.g. from a service provider that loads before
+ * Composer's autoload files, or in a php.ini prepend).
+ *
+ * Two are worth knowing about:
+ *
+ * - K_TCPDF_CALLS_IN_HTML = false blocks TCPDF method calls embedded in HTML
+ *   input, which would otherwise be a code-execution path for user content.
+ * - K_TCPDF_THROW_EXCEPTION_ERROR = true turns TCPDF's internal die() into
+ *   exceptions, so failures are catchable instead of killing the process.
+ *
+ * K_PATH_CACHE defaults to the system temp directory. On serverless targets
+ * (AWS Lambda, Vercel, ...) only /tmp is writable, which this satisfies; but the
+ * directory is per-instance and ephemeral, so never keep compiled font
+ * definitions there - those belong in fontCachePath(), committed or built in CI.
+ */
+
 defined('K_TCPDF_EXTERNAL_CONFIG') || define('K_TCPDF_EXTERNAL_CONFIG', true);
 defined('K_TCPDF_CALLS_IN_HTML') || define('K_TCPDF_CALLS_IN_HTML', false);
 defined('K_TCPDF_THROW_EXCEPTION_ERROR') || define('K_TCPDF_THROW_EXCEPTION_ERROR', true);

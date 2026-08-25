@@ -2,10 +2,34 @@
 
 namespace Nadar\PdfGenerator;
 
+use Nadar\PdfGenerator\Contract\PdfFactoryInterface;
 use Nadar\PdfGenerator\Contract\PdfSettingsInterface;
 use Nadar\PdfGenerator\Value\Color;
 use Nadar\PdfGenerator\Value\Margins;
 
+/**
+ * Defaults for everything in {@see PdfSettingsInterface} except the paths and
+ * the font set.
+ *
+ * Extend this and override only what differs:
+ *
+ * ```php
+ * final class BrandPdfSettings extends AbstractPdfSettings
+ * {
+ *     public function fontPath(): string      { return resource_path('pdf/fonts'); }
+ *     public function fontCachePath(): string { return resource_path('pdf/fonts/cache'); }
+ *     public function templatePath(): string  { return resource_path('pdf/templates'); }
+ *
+ *     public function fonts(): FontSet
+ *     {
+ *         return FontSet::make()
+ *             ->family('inter', 'Inter-Regular.ttf', 'Inter-Bold.ttf')
+ *             ->role('regular', 'inter')
+ *             ->role('bold', 'inter', 'bold');
+ *     }
+ * }
+ * ```
+ */
 abstract class AbstractPdfSettings implements PdfSettingsInterface
 {
     /** @return string|list<float> */
@@ -19,6 +43,7 @@ abstract class AbstractPdfSettings implements PdfSettingsInterface
         return 'P';
     }
 
+    /** Zero margins, so measured design coordinates are page coordinates. */
     public function margins(): Margins
     {
         return new Margins(0, 0, 0);
@@ -31,7 +56,7 @@ abstract class AbstractPdfSettings implements PdfSettingsInterface
 
     public function textColor(): Color
     {
-        return Color::gray(0);
+        return Color::black();
     }
 
     public function fontSize(): float
@@ -57,5 +82,10 @@ abstract class AbstractPdfSettings implements PdfSettingsInterface
     public function debug(): bool
     {
         return false;
+    }
+
+    public function pdfFactory(): ?PdfFactoryInterface
+    {
+        return null;
     }
 }

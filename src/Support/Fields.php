@@ -2,9 +2,26 @@
 
 namespace Nadar\PdfGenerator\Support;
 
+/**
+ * Reads slot values out of a plain data array.
+ *
+ * Backs {@see \Nadar\PdfGenerator\PdfGenerator::writeAll()}.
+ */
 final class Fields
 {
-    /** @param array<string,mixed> $data */
+    /**
+     * Read one field as a trimmed string.
+     *
+     * `-` and `_` are interchangeable in the key, so a layout slot named
+     * `event-title` also matches a data key `event_title`. A missing key yields
+     * $default rather than an error: a half-filled document is easier to debug
+     * than an exception in the middle of a render.
+     *
+     * @param array<string,mixed> $data
+     *
+     * @throws \Nadar\PdfGenerator\Exception\ConfigurationException when the value
+     *         is neither scalar nor {@see \Stringable}
+     */
     public static function get(array $data, string $key, string $default = ''): string
     {
         if (array_key_exists($key, $data)) {
@@ -20,8 +37,10 @@ final class Fields
     }
 
     /**
+     * Read many fields at once, keyed as requested.
+     *
      * @param array<string,mixed> $data
-     * @param iterable<string> $keys
+     * @param iterable<string>    $keys
      *
      * @return array<string,string>
      */

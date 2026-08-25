@@ -4,46 +4,249 @@
 declare(strict_types=1);
 
 use Nadar\PdfGenerator\Contract\PdfSettingsInterface;
+use Nadar\PdfGenerator\Exception\FontException;
 use Nadar\PdfGenerator\Support\FontCompiler;
 
-require dirname(__DIR__) . '/vendor/autoload.php';
+/*
+ * Composer's bin proxy defines this global, which resolves the *consumer's*
+ * autoloader. The dirname() fallback only applies to a standalone clone of this
+ * repository, where vendor/ sits next to bin/.
+ */
+$autoload = $GLOBALS['_composer_autoload_path'] ?? dirname(__DIR__) . '/vendor/autoload.php';
 
-$command = $argv[1] ?? '';
-$options = getopt('', ['settings:']);
-$settingsClass = $options['settings'] ?? null;
-
-if (!$settingsClass || !class_exists($settingsClass)) {
-    fwrite(STDERR, "Missing or unknown --settings class.\n");
+if (!is_file($autoload)) {
+    fwrite(STDERR, "Could not locate the Composer autoloader (looked at {$autoload}).\n");
     exit(1);
 }
 
-$settings = new $settingsClass();
-if (!$settings instanceof PdfSettingsInterface) {
-    fwrite(STDERR, "Settings class must implement PdfSettingsInterface.\n");
-    exit(1);
+require $autoload;
+
+const USAGE = <<<TXT
+    nadar/pdf-generator font tooling
+
+    Usage:
+      pdf-generator fonts:build  (--settings=CLASS | --fonts=DIR --cache=DIR) [--force]
+      pdf-generator fonts:check  --settings=CLASS
+      pdf-generator help
+
+    Options:
+      --settings=CLASS  A PdfSettingsInterface implementation, used for the font and
+                        cache paths (and, for fonts:check, the declared faces).
+      --bootstrap=FILE  PHP file to require before resolving --settings, for classes
+                        that are not registered with Composer's autoloader.
+      --fonts=DIR       Directory holding the .ttf/.otf sources. Use this instead of
+                        --settings when the settings class needs a booted framework
+                        (Laravel's resource_path(), a container binding, ...).
+      --cache=DIR       Directory the compiled definitions are written to.
+      --force           Recompile faces that already have a definition. TCPDF skips
+                        existing ones, so a stale cache is never refreshed without this.
+
+    Examples:
+      pdf-generator fonts:build --settings="App\\\\Pdf\\\\BrandPdfSettings"
+      pdf-generator fonts:build --fonts=resources/pdf/fonts --cache=resources/pdf/fonts/cache
+      pdf-generator fonts:build --bootstrap=examples/BrandPdfSettings.php \\
+                               --settings="Nadar\\PdfGenerator\\Examples\\BrandPdfSettings"
+
+    TXT;
+
+/*
+ * Options are parsed by hand rather than with getopt(): getopt() stops at the
+ * first non-option argument, so it silently returns nothing for the natural
+ * "pdf-generator fonts:build --settings=..." ordering.
+ *
+ * @return array{command:string,options:array<string,string|bool>}
+ */
+$parse = static function (array $argv): array {
+    $command = '';
+    $options = [];
+
+    foreach (array_slice($argv, 1) as $argument) {
+        if (!str_starts_with($argument, '-')) {
+            $command = $command === '' ? $argument : $command;
+            continue;
+        }
+
+        $name = ltrim($argument, '-');
+        if (str_contains($name, '=')) {
+            [$name, $value] = explode('=', $name, 2);
+            $options[$name] = $value;
+            continue;
+        }
+
+        $options[$name] = true;
+    }
+
+    return ['command' => $command, 'options' => $options];
+};
+
+['command' => $command, 'options' => $options] = $parse($argv);
+
+$wantsHelp = $command === 'help' || isset($options['help']) || isset($options['h']);
+
+if ($wantsHelp || $command === '') {
+    fwrite($wantsHelp ? STDOUT : STDERR, USAGE . "\n");
+    exit($wantsHelp ? 0 : 1);
 }
+
+/** @param array<string,string|bool> $options */
+$stringOption = static function (array $options, string $name): ?string {
+    $value = $options[$name] ?? null;
+
+    return is_string($value) && $value !== '' ? $value : null;
+};
+
+$force = ($options['force'] ?? false) === true;
+$settingsClass = $stringOption($options, 'settings');
+$bootstrap = $stringOption($options, 'bootstrap');
+
+if ($bootstrap !== null) {
+    if (!is_file($bootstrap)) {
+        fwrite(STDERR, "Bootstrap file \"{$bootstrap}\" does not exist.\n");
+        exit(1);
+    }
+
+    require $bootstrap;
+}
+
+$fontsDir = $stringOption($options, 'fonts');
+$cacheDir = $stringOption($options, 'cache');
+
+/** Instantiate the settings class, explaining the --fonts/--cache route when it fails. */
+$loadSettings = static function (?string $class): PdfSettingsInterface {
+    if ($class === null) {
+        fwrite(STDERR, "Missing --settings. Pass a PdfSettingsInterface class, or use --fonts= and --cache=.\n");
+        exit(1);
+    }
+
+    if (!class_exists($class)) {
+        fwrite(STDERR, sprintf(
+            "Unknown --settings class \"%s\". Check the namespace, and that it is autoloadable "
+            . "or loaded via --bootstrap=FILE.\n",
+            $class
+        ));
+        exit(1);
+    }
+
+    try {
+        $settings = new $class();
+    } catch (Throwable $exception) {
+        fwrite(STDERR, sprintf(
+            "Could not instantiate \"%s\": %s\n"
+            . "Settings classes that rely on framework helpers (resource_path(), config(), ...) "
+            . "cannot be constructed by this standalone CLI.\n"
+            . "Either pass plain paths:\n"
+            . "  pdf-generator fonts:build --fonts=<dir> --cache=<dir>\n"
+            . "or call FontCompiler::compileDirectory() from a framework command.\n",
+            $class,
+            $exception->getMessage()
+        ));
+        exit(1);
+    }
+
+    if (!$settings instanceof PdfSettingsInterface) {
+        fwrite(STDERR, "Settings class \"{$class}\" must implement " . PdfSettingsInterface::class . ".\n");
+        exit(1);
+    }
+
+    return $settings;
+};
 
 switch ($command) {
     case 'fonts:build':
-        $compiled = FontCompiler::compileDirectory($settings->fontPath(), $settings->fontCachePath());
-        foreach ($compiled as $file => $key) {
-            fwrite(STDOUT, sprintf("compiled %s -> %s\n", $file, $key));
+        if ($fontsDir === null || $cacheDir === null) {
+            $settings = $loadSettings($settingsClass);
+            $fontsDir ??= $settings->fontPath();
+            $cacheDir ??= $settings->fontCachePath();
         }
+
+        $warnings = [];
+
+        try {
+            $compiled = FontCompiler::compileDirectory(
+                $fontsDir,
+                $cacheDir,
+                $force,
+                static function (string $notice) use (&$warnings): void {
+                    $warnings[] = $notice;
+                }
+            );
+        } catch (FontException $exception) {
+            fwrite(STDERR, 'error: ' . $exception->getMessage() . "\n");
+            exit(1);
+        }
+
+        /*
+         * Resolved after the build, because the cache directory may not have
+         * existed before it. Absolute paths are the point: they make a
+         * misconfigured cache location visible here rather than at first render.
+         */
+        $resolvedCache = realpath($cacheDir) ?: $cacheDir;
+
+        fwrite(STDOUT, sprintf(
+            "sources: %s\ncache:   %s\n\n",
+            realpath($fontsDir) ?: $fontsDir,
+            FontCompiler::normalizePath($resolvedCache)
+        ));
+
+        foreach ($warnings as $warning) {
+            fwrite(STDOUT, 'warning: ' . $warning . "\n");
+        }
+
+        if ($warnings !== []) {
+            fwrite(STDOUT, "\n");
+        }
+
+        foreach ($compiled as $file => $key) {
+            fwrite(STDOUT, sprintf(
+                "compiled %s -> %s\n         %s\n",
+                $file,
+                $key,
+                FontCompiler::cacheFile($resolvedCache, $key)
+            ));
+        }
+
+        fwrite(STDOUT, sprintf("\n%d face(s) compiled.\n", count($compiled)));
         exit(0);
 
     case 'fonts:check':
+        $settings = $loadSettings($settingsClass);
+        $cacheDir ??= $settings->fontCachePath();
+        $faces = $settings->fonts()->faces();
+
+        if ($faces === []) {
+            fwrite(STDOUT, "No faces declared in fonts(); only TCPDF core fonts are available.\n");
+            exit(0);
+        }
+
+        fwrite(STDOUT, sprintf("cache: %s\n\n", FontCompiler::normalizePath($cacheDir)));
+
         $failed = false;
-        foreach ($settings->fonts()->faces() as $face) {
-            $cache = rtrim($settings->fontCachePath(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $face->cacheKey . '.php';
-            $ok = is_file($cache);
-            fwrite(STDOUT, sprintf("%s -> %s [%s]\n", $face->ttfFile, $face->cacheKey, $ok ? 'ok' : 'missing'));
+        foreach ($faces as $face) {
+            if ($face->core) {
+                fwrite(STDOUT, sprintf("%-18s %-28s -> %-24s [core]\n", $face->label(), '(built into TCPDF)', $face->cacheKey));
+                continue;
+            }
+
+            $ok = is_file(FontCompiler::cacheFile($cacheDir, $face->cacheKey));
+            fwrite(STDOUT, sprintf(
+                "%-18s %-28s -> %-24s [%s]\n",
+                $face->label(),
+                $face->file,
+                $face->cacheKey,
+                $ok ? 'ok' : 'MISSING'
+            ));
             if (!$ok) {
                 $failed = true;
             }
         }
+
+        if ($failed) {
+            fwrite(STDERR, "\nSome definitions are missing. Run: pdf-generator fonts:build --settings=...\n");
+        }
+
         exit($failed ? 1 : 0);
 
     default:
-        fwrite(STDERR, "Usage: vendor/bin/pdf-generator fonts:build|fonts:check --settings=App\\Pdf\\BrandSettings\n");
+        fwrite(STDERR, "Unknown command \"{$command}\".\n\n" . USAGE . "\n");
         exit(1);
 }

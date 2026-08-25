@@ -2,3 +2,11 @@
 /composer.lock
 .phpunit.result.cache
 .php-cs-fixer.cache
+
+# Font binaries and their compiled definitions are not committed: they are large
+# and separately licensed. See tests/Fixtures/fonts/README.md and docs/fonts.md.
+/examples/assets/fonts/
+/examples/output/
+/tests/Fixtures/fonts/*.ttf
+/tests/Fixtures/fonts/*.otf
+/tests/Fixtures/fonts/cache/
