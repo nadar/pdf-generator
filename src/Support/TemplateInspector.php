@@ -6,8 +6,19 @@ use Nadar\PdfGenerator\Exception\TemplateNotFoundException;
 use Nadar\PdfGenerator\Value\PageSize;
 use setasign\Fpdi\Tcpdf\Fpdi;
 
+/**
+ * Reads geometry out of a template PDF without starting a document.
+ *
+ * Used by {@see \Nadar\PdfGenerator\PdfGenerator::page()} to derive a page's
+ * size from the template it stamps.
+ */
 final class TemplateInspector
 {
+    /**
+     * Page size in mm, taken from the template's CropBox.
+     *
+     * @throws TemplateNotFoundException when the file is missing or unreadable
+     */
     public static function pageSize(string $file, int $page = 1): PageSize
     {
         self::assertReadable($file);
@@ -22,6 +33,11 @@ final class TemplateInspector
         return new PageSize((float) $size['width'], (float) $size['height']);
     }
 
+    /**
+     * How many pages the template has.
+     *
+     * @throws TemplateNotFoundException when the file is missing or unreadable
+     */
     public static function pageCount(string $file): int
     {
         self::assertReadable($file);

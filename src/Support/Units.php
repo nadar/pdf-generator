@@ -2,24 +2,40 @@
 
 namespace Nadar\PdfGenerator\Support;
 
+/**
+ * Unit conversions.
+ *
+ * The package works in millimetres, but PDF-native tooling reports points
+ * (`pdfinfo`, `pdftotext -bbox`), so measurements taken off a reference need
+ * converting: `mm = pt * 25.4 / 72`.
+ */
 final class Units
 {
+    /** Millimetres to PostScript points. */
     public static function mmToPt(float $mm): float
     {
         return $mm * 72 / 25.4;
     }
 
+    /** PostScript points to millimetres - the conversion for measured design values. */
     public static function ptToMm(float $pt): float
     {
         return $pt * 25.4 / 72;
     }
 
+    /** Inches to millimetres. */
     public static function inToMm(float $in): float
     {
         return $in * 25.4;
     }
 
-    /** @return list<float> */
+    /**
+     * Dimensions of a named page format in mm, honouring orientation.
+     *
+     * Unknown formats fall back to A4.
+     *
+     * @return list<float> `[width, height]`
+     */
     public static function pageSize(string $format, string $orientation = 'P'): array
     {
         $sizes = [
