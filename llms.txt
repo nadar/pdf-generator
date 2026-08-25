@@ -1,0 +1,35 @@
+# nadar/pdf-generator
+
+> Pixel-perfect template-overlay PDF generation for PHP, on top of TCPDF and FPDI.
+> A typed facade for fixed-layout print work: stamp a designer's PDF, then place
+> text, images and codes at measured coordinates.
+
+Units are millimetres with the origin at the top-left; font sizes are points.
+`TextBox::y` is the top of the first line's cell, not the baseline - pass
+`anchor: Anchor::Baseline` to use a measured design coordinate verbatim.
+
+## Start here
+
+- [AGENTS.md](AGENTS.md): the invariants, in ~60 lines. Read this first.
+- [README.md](README.md): why, install, quick start, API table.
+
+## Guides
+
+- [docs/matching-a-template.md](docs/matching-a-template.md): reproducing an existing design - what to ask for, how to extract every number, how to calibrate.
+- [docs/fonts.md](docs/fonts.md): formats, conversion, compiling the cache, multi-weight families, CI.
+- [docs/images-and-shapes.md](docs/images-and-shapes.md): fit and clip modes, missing-image fallbacks, source caching.
+- [docs/codes-and-qr.md](docs/codes-and-qr.md): QR codes on artwork, error-correction trade-offs, linear barcodes.
+- [docs/repeated-slots-and-pagination.md](docs/repeated-slots-and-pagination.md): repeated row slots and page breaks in fixed layouts.
+- [docs/framework-integration.md](docs/framework-integration.md): Laravel and Symfony, streaming responses, serverless, custom TCPDF subclasses.
+- [docs/testing-generated-pdfs.md](docs/testing-generated-pdfs.md): metrics assertions, golden files, content-stream inspection.
+
+## For agents
+
+- [skills/pdf-template-calibration/SKILL.md](skills/pdf-template-calibration/SKILL.md): the step-by-step calibration procedure.
+
+## Examples
+
+- [examples/template-overlay-poster.php](examples/template-overlay-poster.php): stamped template, repeated rows, circular images, per-row QR, pagination.
+- [examples/basic-template.php](examples/basic-template.php): stamp a template, fill a layout from keyed data.
+- [examples/overflow-policies.php](examples/overflow-policies.php): every overflow policy with its resolved size.
+- [examples/events-pagination.php](examples/events-pagination.php): a long list across pages.
