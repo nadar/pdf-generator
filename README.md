@@ -14,6 +14,11 @@ It helps you with:
 - strict font/style handling to avoid silent bold/italic failures on embedded fonts
 - deterministic PDF timestamps for reproducible output
 
+## Requirements
+
+- PHP 8.4 or 8.5
+- `mbstring` and `zlib` extensions
+
 ## Installation
 
 ```bash
