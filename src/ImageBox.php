@@ -2,6 +2,7 @@
 
 namespace Nadar\PdfGenerator;
 
+use Nadar\PdfGenerator\Exception\InvalidValueException;
 use Nadar\PdfGenerator\Value\Color;
 use Nadar\PdfGenerator\Value\Rect;
 
@@ -24,7 +25,7 @@ use Nadar\PdfGenerator\Value\Rect;
  *
  * @see PdfGenerator::image()
  */
-final class ImageBox
+final class ImageBox implements Slot
 {
     public readonly Shape $shape;
 
@@ -40,8 +41,9 @@ final class ImageBox
      *                                 default; lowering it shrinks the file at the cost
      *                                 of detail.
      * @param null|Color  $placeholder fill drawn in the box's shape when the source is
-     *                                 missing or unreachable. Without it - and without an
-     *                                 `$onMissing` callback - a missing image throws.
+     *                                 missing or unreachable. Composes with `image()`'s
+     *                                 `$onMissing`, which draws on top of it. Without either,
+     *                                 a missing image throws.
      * @param float       $rotation    clockwise rotation in degrees around the box centre
      */
     public function __construct(
@@ -57,7 +59,7 @@ final class ImageBox
         public readonly float $rotation = 0.0
     ) {
         if ($w <= 0 || $h <= 0) {
-            throw new \InvalidArgumentException(sprintf(
+            throw new InvalidValueException(sprintf(
                 'ImageBox "%s" needs a positive width and height, got %.3f x %.3f mm.',
                 $id,
                 $w,
@@ -66,7 +68,7 @@ final class ImageBox
         }
 
         if ($dpi <= 0) {
-            throw new \InvalidArgumentException(sprintf('ImageBox "%s" needs a positive dpi, %d given.', $id, $dpi));
+            throw new InvalidValueException(sprintf('ImageBox "%s" needs a positive dpi, %d given.', $id, $dpi));
         }
 
         $this->shape = $shape ?? Shape::rect();

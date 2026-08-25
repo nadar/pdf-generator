@@ -34,12 +34,19 @@ final class ColorTest extends TestCase
         yield 'word' => ['red'];
     }
 
-    /** toArray() is the documented accessor; it must match the raw channels. */
-    public function testToArrayMatchesChannelsForEveryModel(): void
+    /** The channel list is reachable only through toArray(). */
+    public function testChannelsAreNotPubliclyReadable(): void
     {
-        foreach ([Color::rgb(1, 2, 3), Color::cmyk(10, 20, 30, 40), Color::gray(128)] as $color) {
-            self::assertSame($color->channels, $color->toArray());
-        }
+        $property = new \ReflectionProperty(Color::class, 'channels');
+
+        self::assertTrue($property->isPrivate(), 'toArray() is the accessor; the property is an implementation detail');
+    }
+
+    public function testToArrayReturnsTheChannelsForEveryModel(): void
+    {
+        self::assertSame([1, 2, 3], Color::rgb(1, 2, 3)->toArray());
+        self::assertSame([10.0, 20.0, 30.0, 40.0], Color::cmyk(10, 20, 30, 40)->toArray());
+        self::assertSame([128], Color::gray(128)->toArray());
     }
 
     public function testChannelCounts(): void

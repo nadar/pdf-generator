@@ -10,14 +10,14 @@ measured off the design. This package is that glue, typed and with strict
 defaults.
 
 - **Template-stamped pages** with size and orientation derived from the template
-- **Typed slots** - `TextBox` / `ImageBox` / `Layout` - so call sites read like a spec
+- **Typed slots** - text, image and code slots share one `Layout`, so a repeated row moves as a unit
 - **Design coordinates as-is**: `Anchor::Baseline` takes the baseline a design gives you
 - **A measurement API**: `probe()` reports where text will land, without drawing
 - **Overflow policies** (`Shrink`, `Clip`, `Truncate`, `ShrinkThenClip`) and a line cap
 - **Images** with cover/contain fit, circular and rounded clipping, and designed fallbacks
 - **QR codes and barcodes** defaulting to transparent-on-artwork
 - **Strict fonts**, so a missing bold face fails loudly instead of printing wrong
-- **Byte-stable output** for golden-file tests and HTTP caching
+- **Byte-stable output** for golden-file tests and HTTP caching, codes included
 
 ## Requirements
 
@@ -84,14 +84,20 @@ See [docs/fonts.md](docs/fonts.md) for formats, `.woff` conversion and CI.
 
 ### 3. Render
 
+A row's geometry - text, photo and code - is one `Layout`, so `repeat()` moves
+all of it and the loop carries no offset arithmetic:
+
 ```php
-use Nadar\PdfGenerator\{Align, Anchor, EccLevel, ImageBox, Layout, PdfGenerator, TextBox};
+use Nadar\PdfGenerator\{Align, ImageBox, Layout, PdfGenerator, QrBox, TextBox};
 use Nadar\PdfGenerator\Value\Color;
 
-$layout = Layout::fromArray([
+$row = Layout::fromArray([
     ['id' => 'title', 'x' => 53.2, 'y' => 58.48, 'w' => 120, 'h' => 11.5, 'font' => 'bold', 'size' => 24, 'maxLines' => 1],
     ['id' => 'meta',  'x' => 53.2, 'y' => 70.11, 'w' => 120, 'h' => 9.5,  'font' => 'bold', 'size' => 19, 'maxLines' => 1],
-]);
+])->with(
+    ImageBox::circle('photo', cx: 30.34, cy: 68.3, diameter: 30.85, placeholder: Color::hex('#ff920c')),
+    new QrBox('link', x: 179, y: 58.63, size: 19.5, color: Color::hex('#223764')),
+);
 
 $pdf = (new PdfGenerator(new BrandPdfSettings()))
     ->title('June highlights')
@@ -99,20 +105,15 @@ $pdf = (new PdfGenerator(new BrandPdfSettings()))
 
 $pdf->write(new TextBox('month', x: 20, y: 28.35, w: 170, size: 25, align: Align::Center), 'June');
 
-foreach ($layout->repeat(times: 6, dy: 40.3) as $index => $row) {
+foreach ($row->repeat(times: 6, dy: 40.3) as $index => $slots) {
     $event = $events[$index] ?? null;
     if ($event === null) {
         break;
     }
 
-    $offset = $index * 40.3;
-
-    $pdf->writeAll($row, $event);
-    $pdf->image(
-        ImageBox::circle('photo', cx: 30.34, cy: 68.3 + $offset, diameter: 30.85, placeholder: Color::hex('#ff920c')),
-        $event['image'],
-    );
-    $pdf->qr($event['url'], x: 179, y: 58.63 + $offset, size: 19.5, color: Color::hex('#223764'));
+    $pdf->writeAll($slots, $event);                        // text slots
+    $pdf->image($slots->image('photo'), $event['image']);  // image slot
+    $pdf->qr($slots->qr('link'), $event['url']);           // code slot
 }
 
 file_put_contents('poster.pdf', $pdf->bytes());
@@ -176,7 +177,7 @@ Every method carries a full docblock; this is the inventory.
 | `page(?string $template, string\|array\|null $format, ?string $orientation, int $templatePage, string $box)` | Add a page, optionally stamping a template and deriving its size/orientation. |
 | `stamp(string $template, int $sourcePage, string $box)` | Stamp a template onto the current page. |
 | `templateSize(string $template, int $page)` | Read a template's page size as a `PageSize`. |
-| `assertTemplateSize(string $template, float $w, float $h, float $tolerance)` | Fail loudly on a re-export at the wrong size. |
+| `assertTemplateSize(string $template, float $w, float $h, float $tolerance)` | Fail loudly on a re-export at the wrong size (0.5 mm tolerance by default). |
 | `append(string $pdfBytes)` / `appendFile(string $path)` | Append every page of another PDF. |
 | `bytes()` / `save(string $path)` | Render the document. Both close it. |
 
@@ -185,7 +186,7 @@ Every method carries a full docblock; this is the inventory.
 | Method | Purpose |
 | --- | --- |
 | `write(TextBox $box, string $text)` | Write into a typed slot, applying its overflow policy and anchor. |
-| `writeAll(iterable $boxes, array $data)` | Fill a `Layout` from keyed data. |
+| `writeAll(iterable $boxes, array $data)` | Fill a `Layout`'s text slots from keyed data; other slots are skipped. |
 | `writeText()` / `writeHtml()` / `writeRotated()` | Convenience writers without building a `TextBox`. |
 | `probe(TextBox $box, string $text)` | Resolve a box's geometry **without drawing**. |
 | `lastMetrics()` | The geometry of the most recent `write()`. |
@@ -197,8 +198,11 @@ Every method carries a full docblock; this is the inventory.
 | Method | Purpose |
 | --- | --- |
 | `image(ImageBox $box, ?string $source, ?callable $onMissing)` | Place an image, scaled and clipped to its box. |
-| `qr(string $data, float $x, float $y, float $size, ...)` | Draw a QR code; transparent and unpadded by default. |
-| `barcode1d(string $data, Barcode1D $type, ...)` | Draw a linear barcode. |
+| `fillShape(ImageBox $box, Color $color)` | Paint a slot's outline - the fill a `placeholder:` performs. |
+| `qr(QrBox $box, string $data)` | Draw a QR code; transparent, unpadded and reproducible by default. |
+| `qrAt(string $data, float $x, float $y, float $size, ...)` | The same, at explicit coordinates. |
+| `barcode1d(BarcodeBox $box, string $data)` | Draw a linear barcode. |
+| `barcode1dAt(string $data, Barcode1D $type, ...)` | The same, at explicit coordinates. |
 | `imageLoader()` | The image resolver, for inspecting or clearing its cache. |
 
 ### Metadata and diagnostics

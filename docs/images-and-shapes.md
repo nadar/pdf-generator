@@ -39,22 +39,32 @@ TCPDF's nonzero-winding clip operator, or to count to the fifteenth argument of
 
 ## Missing images
 
-Remote images fail in production. Three ways to handle it, in the order they
-apply:
+Remote images fail in production, so the fallback is part of the design, not an
+afterthought. A `placeholder:` colour fills the box's own shape, and `image()`'s
+`$onMissing` callback draws on top of it. **The two compose** - the placeholder
+paints first, then the callback runs:
 
 ```php
-// 1. a callback, for full control over the fallback
-$pdf->image($box, $url, fn (ImageBox $box) => $this->drawInitials($box));
-
-// 2. a placeholder colour, drawn in the box's own shape
-$pdf->image(ImageBox::circle('photo', cx: 30, cy: 68, diameter: 31, placeholder: Color::hex('#ff920c')), $url);
-
-// 3. nothing - a MissingImageException naming the box and the reason
-$pdf->image($box, $url);
+$pdf->image(
+    ImageBox::circle('photo', cx: 30, cy: 68, diameter: 31, placeholder: Color::hex('#ff920c')),
+    $url,
+    fn (ImageBox $box) => $pdf->writeText($box->x, $box->y + $box->h / 2, $box->w, 'Image'),
+);
 ```
 
-Prefer a designed fallback over an empty gap: if the reference PDF shows a
-coloured circle where an image is missing, that *is* the specification.
+That is the common case - a coloured shape with a word or initials in it - and
+it needs no manual redraw of the circle. Either alone works too; with neither, a
+`MissingImageException` names the box and the reason.
+
+If a reference PDF shows a coloured circle where an image is missing, that *is*
+the specification: implement it, rather than leaving a gap.
+
+`fillShape()` exposes the same fill on its own, for anything that wants a slot's
+outline painted without going through the missing-image path:
+
+```php
+$pdf->fillShape(ImageBox::circle('badge', cx: 35, cy: 35, diameter: 30), Color::hex('#223764'));
+```
 
 ## One fetch per source
 

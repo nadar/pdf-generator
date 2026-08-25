@@ -2,6 +2,8 @@
 
 namespace Nadar\PdfGenerator;
 
+use Nadar\PdfGenerator\Exception\InvalidValueException;
+
 /**
  * The outline an image is clipped to.
  *
@@ -38,12 +40,12 @@ final class Shape
      *
      * @param float $radius corner radius in mm; clamped to half the shorter side
      *
-     * @throws \InvalidArgumentException when $radius is negative
+     * @throws InvalidValueException when $radius is negative
      */
     public static function roundRect(float $radius): self
     {
         if ($radius < 0) {
-            throw new \InvalidArgumentException(sprintf('Corner radius must not be negative, %.3f given.', $radius));
+            throw new InvalidValueException(sprintf('Corner radius must not be negative, %.3f given.', $radius));
         }
 
         return new self(ShapeKind::RoundRect, $radius);

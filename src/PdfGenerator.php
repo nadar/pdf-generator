@@ -57,6 +57,14 @@ use setasign\Fpdi\Tcpdf\Fpdi;
  */
 final class PdfGenerator
 {
+    /**
+     * Default tolerance for {@see assertTemplateSize()}, in mm.
+     *
+     * Loose enough for design-tool exports, tight enough to separate any two
+     * page formats that could be confused for one another.
+     */
+    public const DEFAULT_SIZE_TOLERANCE = 0.5;
+
     private Fpdi $pdf;
 
     private bool $debug;
@@ -307,21 +315,34 @@ final class PdfGenerator
      * Assert a template's size, so a re-export at the wrong page size fails
      * loudly instead of shifting every coordinate.
      *
+     * The default tolerance is deliberately loose. Design tools do not export
+     * exact ISO sizes - Canva's "A4" is 210.079 x 297.127 mm - so a tight
+     * tolerance would reject the natural
+     * `assertTemplateSize('poster.pdf', 210, 297)` and make the feature
+     * unusable without first discovering the parameter. Half a millimetre still
+     * separates every page format anyone would confuse (A4 and Letter differ by
+     * ~6 mm on the short edge).
+     *
+     * Use {@see templateSize()} when you need the exact numbers.
+     *
      * @param float $w         expected width in mm
      * @param float $h         expected height in mm
      * @param float $tolerance allowed deviation in mm
      *
      * @throws TemplateSizeMismatchException when the size differs by more than $tolerance
      */
-    public function assertTemplateSize(string $template, float $w, float $h, float $tolerance = 0.05): static
+    public function assertTemplateSize(string $template, float $w, float $h, float $tolerance = self::DEFAULT_SIZE_TOLERANCE): static
     {
         $size = $this->templateSize($template);
         if (abs($size->width - $w) > $tolerance || abs($size->height - $h) > $tolerance) {
             throw new TemplateSizeMismatchException(sprintf(
-                'Template "%s" size mismatch. Expected %.3f x %.3f mm, got %.3f x %.3f mm.',
+                'Template "%s" size mismatch. Expected %.3f x %.3f mm (tolerance %.3f mm), got %.3f x %.3f mm. '
+                . 'Design-tool exports are rarely exact ISO sizes; call templateSize() to read the real '
+                . 'values, then assert those or widen the tolerance.',
                 $template,
                 $w,
                 $h,
+                $tolerance,
                 $size->width,
                 $size->height
             ));
@@ -463,13 +484,21 @@ final class PdfGenerator
      * interchangeable, and a missing key writes an empty string rather than
      * failing - a half-filled document is easier to debug than an exception.
      *
-     * @param iterable<int|string,TextBox> $boxes a {@see Layout}, or any iterable of boxes.
-     *                                            String keys override the box's own id.
-     * @param array<string,mixed>          $data
+     * Non-text slots are skipped, so a {@see Layout} that also holds image and
+     * code slots can be passed straight in - those are drawn with
+     * {@see image()}, {@see qr()} and {@see barcode1d()}.
+     *
+     * @param iterable<int|string,Slot> $boxes a {@see Layout}, or any iterable of slots.
+     *                                        String keys override the slot's own id.
+     * @param array<string,mixed>       $data
      */
     public function writeAll(iterable $boxes, array $data): static
     {
         foreach ($boxes as $id => $box) {
+            if (!$box instanceof TextBox) {
+                continue;
+            }
+
             $slotId = is_string($id) ? $id : $box->id;
             $this->write($box, Fields::get($data, $slotId));
         }
@@ -485,14 +514,14 @@ final class PdfGenerator
      * need. Each distinct source is fetched **once** per document, so reading
      * the dimensions does not cost a second download.
      *
-     * Missing sources are expected in production; they resolve in this order:
-     *
-     * 1. `$onMissing` callback, if given - full control over the fallback;
-     * 2. the box's `placeholder` colour, drawn in the box's own shape;
-     * 3. otherwise a {@see MissingImageException}.
+     * Missing sources are expected in production. When one cannot be read, the
+     * box's `placeholder` colour is filled first (if set) and `$onMissing` is
+     * then called (if given), so the two **compose**: a coloured shape with a
+     * label on top needs no manual redraw. With neither, a
+     * {@see MissingImageException} names the box and the reason.
      *
      * @param null|string $source local path or `http(s)` URL; `null` counts as missing
-     * @param null|callable(ImageBox, self):void $onMissing draws the fallback itself
+     * @param null|callable(ImageBox, self):void $onMissing draws on top of the placeholder
      *
      * @throws MissingImageException when the source cannot be read and nothing handles it
      */
@@ -512,19 +541,24 @@ final class PdfGenerator
         }
 
         if ($resolved === null) {
+            if ($box->placeholder === null && $onMissing === null) {
+                throw new MissingImageException((string) $failure);
+            }
+
+            // Both apply, in that order: the placeholder is the background the
+            // design specifies, and the callback draws on top of it. "Coloured
+            // circle with a word in it" is the common case, and needing to
+            // redraw the circle by hand to get the word would make one of the
+            // two options dead weight.
+            if ($box->placeholder !== null) {
+                $this->drawShapeFill($box, $box->placeholder);
+            }
+
             if ($onMissing !== null) {
                 $onMissing($box, $this);
-
-                return $this;
             }
 
-            if ($box->placeholder !== null) {
-                $this->fillShape($box, $box->placeholder);
-
-                return $this;
-            }
-
-            throw new MissingImageException((string) $failure);
+            return $this;
         }
 
         [$x, $y, $w, $h] = $box->placement($resolved->width, $resolved->height);
@@ -577,30 +611,72 @@ final class PdfGenerator
     }
 
     /**
-     * Draw a QR code.
+     * Draw a QR code into a slot.
      *
-     * The defaults are the ones a designed template wants: a **transparent**
-     * background and **no quiet zone**, so the code sits directly on the
-     * artwork instead of punching a white tile through it, and its rendered
-     * size equals the size measured off the design. Scanners need contrast, not
-     * black - so brand-coloured modules on a mid-tone background still read.
+     * The slot's defaults are the ones a designed template wants: a
+     * **transparent** background and **no quiet zone**, so the code sits
+     * directly on the artwork instead of punching a white tile through it, and
+     * its rendered size equals the size measured off the design. Scanners need
+     * contrast, not black - brand-coloured modules on a mid-tone background
+     * still read.
      *
      * ```php
-     * $pdf->qr($event['url'], x: 179, y: 58.6, size: 19.5, color: Color::hex('#223764'));
+     * $pdf->qr(new QrBox('link', x: 179, y: 58.6, size: 19.5, color: Color::hex('#223764')), $event['url']);
      * ```
      *
-     * @param string     $data      the payload, usually a URL
-     * @param float      $size      width and height of the square, in mm
-     * @param null|Color $color     module colour; `null` means black
-     * @param null|Color $background background fill; `null` means transparent
-     * @param EccLevel   $level     error correction. `M` is the right trade-off around
-     *                              20 mm with a full URL; `H` noticeably densifies the grid.
-     * @param int        $quietZone margin **in modules** (TCPDF's own "auto" is 4). Zero
-     *                              lets the design's whitespace serve as the quiet zone.
+     * Taking a {@see QrBox} rather than loose coordinates is what lets a code
+     * live in a {@see Layout} alongside the row's text and image, so
+     * {@see Layout::repeat()} moves all of them together. Use {@see qrAt()} for
+     * a one-off code that no layout owns.
+     *
+     * Output is reproducible: `src/bootstrap.php` disables TCPDF's randomised
+     * mask selection, without which the same payload renders differently every
+     * time and {@see deterministic()} cannot deliver stable bytes.
+     *
+     * @param string $data the payload, usually a URL
+     *
+     * @throws ConfigurationException on empty data
+     */
+    public function qr(QrBox $box, string $data): static
+    {
+        if (trim($data) === '') {
+            throw new ConfigurationException(sprintf('Cannot render QR slot "%s" for empty data.', $box->id));
+        }
+
+        $this->withPreservedCursor(function () use ($box, $data): void {
+            $this->pdf->write2DBarcode(
+                $data,
+                'QRCODE,' . $box->level->value,
+                $box->x,
+                $box->y,
+                $box->size,
+                $box->size,
+                [
+                    'border' => false,
+                    'padding' => $box->quietZone,
+                    'fgcolor' => ($box->color ?? Color::black())->toArray(),
+                    'bgcolor' => $box->background === null ? false : $box->background->toArray(),
+                ],
+                'N'
+            );
+        });
+
+        if ($this->debug) {
+            $this->drawDebugRect($box->bounds(), $box->id);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Draw a QR code at explicit coordinates, without declaring a slot.
+     *
+     * The convenience form of {@see qr()}; see {@see QrBox} for what each
+     * argument means.
      *
      * @throws ConfigurationException on empty data or a non-positive size
      */
-    public function qr(
+    public function qrAt(
         string $data,
         float $x,
         float $y,
@@ -610,61 +686,63 @@ final class PdfGenerator
         EccLevel $level = EccLevel::M,
         int $quietZone = 0
     ): static {
+        return $this->qr(new QrBox('qr', $x, $y, $size, $color, $background, $level, $quietZone), $data);
+    }
+
+    /**
+     * Draw a linear (1D) barcode into a slot - the invoice and logistics case.
+     *
+     * Like {@see qr()}, defaults to a transparent background and no padding,
+     * and takes a slot so it can live in a {@see Layout}. Use
+     * {@see barcode1dAt()} for a one-off.
+     *
+     * @param string $data the payload; must be valid for the slot's symbology
+     *
+     * @throws ConfigurationException on empty data
+     */
+    public function barcode1d(BarcodeBox $box, string $data): static
+    {
         if (trim($data) === '') {
-            throw new ConfigurationException('Cannot render a QR code for empty data.');
+            throw new ConfigurationException(sprintf('Cannot render barcode slot "%s" for empty data.', $box->id));
         }
 
-        if ($size <= 0) {
-            throw new ConfigurationException(sprintf('QR size must be positive, %.3f mm given.', $size));
-        }
-
-        if ($quietZone < 0) {
-            throw new ConfigurationException(sprintf('QR quiet zone must not be negative, %d given.', $quietZone));
-        }
-
-        $this->withPreservedCursor(function () use ($data, $x, $y, $size, $color, $background, $level, $quietZone): void {
-            $this->pdf->write2DBarcode(
+        $this->withPreservedCursor(function () use ($box, $data): void {
+            $this->pdf->write1DBarcode(
                 $data,
-                'QRCODE,' . $level->value,
-                $x,
-                $y,
-                $size,
-                $size,
+                $box->type->value,
+                $box->x,
+                $box->y,
+                $box->w,
+                $box->h,
+                null,
                 [
                     'border' => false,
-                    'padding' => $quietZone,
-                    'fgcolor' => ($color ?? Color::black())->toArray(),
-                    'bgcolor' => $background === null ? false : $background->toArray(),
+                    'padding' => $box->padding,
+                    'fgcolor' => ($box->color ?? Color::black())->toArray(),
+                    'bgcolor' => $box->background === null ? false : $box->background->toArray(),
+                    'text' => $box->showText,
+                    'stretch' => true,
                 ],
                 'N'
             );
         });
 
         if ($this->debug) {
-            $this->drawDebugRect(new Rect($x, $y, $size, $size), 'qr');
+            $this->drawDebugRect($box->bounds(), $box->id);
         }
 
         return $this;
     }
 
     /**
-     * Draw a linear (1D) barcode - the invoice and logistics case.
+     * Draw a linear barcode at explicit coordinates, without declaring a slot.
      *
-     * Like {@see qr()}, defaults to a transparent background and no padding.
-     *
-     * @param string     $data       the payload; must be valid for $type
-     * @param Barcode1D  $type       symbology
-     * @param float      $w          total width in mm
-     * @param float      $h          bar height in mm, excluding any text line
-     * @param null|Color $color      bar (and text) colour; `null` means black
-     * @param null|Color $background background fill; `null` means transparent
-     * @param bool       $showText   print the human-readable line under the bars
-     * @param float      $padding    margin around the bars, **in mm** (unlike {@see qr()},
-     *                               where TCPDF counts modules)
+     * The convenience form of {@see barcode1d()}; see {@see BarcodeBox} for
+     * what each argument means.
      *
      * @throws ConfigurationException on empty data or non-positive dimensions
      */
-    public function barcode1d(
+    public function barcode1dAt(
         string $data,
         Barcode1D $type,
         float $x,
@@ -676,40 +754,10 @@ final class PdfGenerator
         bool $showText = false,
         float $padding = 0.0
     ): static {
-        if (trim($data) === '') {
-            throw new ConfigurationException('Cannot render a barcode for empty data.');
-        }
-
-        if ($w <= 0 || $h <= 0) {
-            throw new ConfigurationException(sprintf('Barcode size must be positive, got %.3f x %.3f mm.', $w, $h));
-        }
-
-        $this->withPreservedCursor(function () use ($data, $type, $x, $y, $w, $h, $color, $background, $showText, $padding): void {
-            $this->pdf->write1DBarcode(
-                $data,
-                $type->value,
-                $x,
-                $y,
-                $w,
-                $h,
-                null,
-                [
-                    'border' => false,
-                    'padding' => $padding,
-                    'fgcolor' => ($color ?? Color::black())->toArray(),
-                    'bgcolor' => $background === null ? false : $background->toArray(),
-                    'text' => $showText,
-                    'stretch' => true,
-                ],
-                'N'
-            );
-        });
-
-        if ($this->debug) {
-            $this->drawDebugRect(new Rect($x, $y, $w, $h), $type->value);
-        }
-
-        return $this;
+        return $this->barcode1d(
+            new BarcodeBox('barcode', $type, $x, $y, $w, $h, $color, $background, $showText, $padding),
+            $data
+        );
     }
 
     /**
@@ -1188,7 +1236,27 @@ final class PdfGenerator
         };
     }
 
-    private function fillShape(ImageBox $box, Color $color): void
+    /**
+     * Fill an image slot's outline with a flat colour.
+     *
+     * The same drawing a `placeholder:` performs, exposed because a fallback
+     * often wants the shape *plus* something on top - a label, initials, an
+     * icon - without reaching for `raw()` and re-deriving the geometry.
+     *
+     * ```php
+     * $pdf->image($photo, $event['image'], function (ImageBox $box) use ($pdf) {
+     *     $pdf->write(new TextBox('label', $box->x, $box->y + $box->h / 2, $box->w, ...), 'Image');
+     * });
+     * ```
+     */
+    public function fillShape(ImageBox $box, Color $color): static
+    {
+        $this->drawShapeFill($box, $color);
+
+        return $this;
+    }
+
+    private function drawShapeFill(ImageBox $box, Color $color): void
     {
         [$cx, $cy] = $box->bounds()->center();
         $channels = $color->toArray();

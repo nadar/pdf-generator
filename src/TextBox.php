@@ -2,8 +2,10 @@
 
 namespace Nadar\PdfGenerator;
 
+use Nadar\PdfGenerator\Exception\InvalidValueException;
 use Nadar\PdfGenerator\Support\Cast;
 use Nadar\PdfGenerator\Value\Color;
+use Nadar\PdfGenerator\Value\Rect;
 
 /**
  * One immutable text slot: where it sits, how it looks, what happens when the
@@ -47,7 +49,7 @@ use Nadar\PdfGenerator\Value\Color;
  *     maxLines?: float|int|string,
  * }
  */
-final class TextBox
+final class TextBox implements Slot
 {
     /**
      * Fraction of the requested size used as the shrink floor when
@@ -109,7 +111,7 @@ final class TextBox
         $this->align = Align::coerce($align);
 
         if ($maxLines !== null && $maxLines < 1) {
-            throw new \InvalidArgumentException(sprintf('maxLines for box "%s" must be at least 1, %d given.', $id, $maxLines));
+            throw new InvalidValueException(sprintf('maxLines for box "%s" must be at least 1, %d given.', $id, $maxLines));
         }
     }
 
@@ -203,6 +205,17 @@ final class TextBox
         return $this->with(x: $this->x + $dx, y: $this->y + $dy);
     }
 
+    /**
+     * The declared box.
+     *
+     * Height is zero when the box declares none - the rendered extent then
+     * depends on the text, which {@see PdfGenerator::probe()} reports.
+     */
+    public function bounds(): Rect
+    {
+        return new Rect($this->x, $this->y, $this->w, $this->h ?? 0.0);
+    }
+
     /** Copy moved to an absolute position. */
     public function at(float $x, float $y): self
     {
@@ -220,14 +233,14 @@ final class TextBox
         return $this->minSize ?? $size * self::DEFAULT_MIN_SIZE_RATIO;
     }
 
-    /** @throws \InvalidArgumentException on an unknown name */
+    /** @throws InvalidValueException on an unknown name */
     private static function anchorFromString(string $value): Anchor
     {
         return match (strtolower(str_replace(['-', '_'], '', $value))) {
             '', 'top', 'celltop' => Anchor::Top,
             'baseline' => Anchor::Baseline,
             'capheight', 'cap', 'inktop' => Anchor::CapHeight,
-            default => throw new \InvalidArgumentException(sprintf(
+            default => throw new InvalidValueException(sprintf(
                 'Unknown anchor "%s". Use "top", "baseline" or "capHeight".',
                 $value
             )),

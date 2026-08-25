@@ -30,6 +30,11 @@ one line and never drops below 13 pt" survives a copy change; "the baseline is a
 document id TCPDF otherwise seeds randomly. Without it, two renders of identical
 input differ and a hash comparison is useless.
 
+Codes are covered too: `src/bootstrap.php` disables TCPDF's randomised QR mask
+selection, without which any document containing a QR code renders a different
+pattern every time and could never match a golden file. See
+[codes-and-qr.md](codes-and-qr.md#reproducible-output).
+
 ```php
 public function testPosterMatchesTheGoldenFile(): void
 {

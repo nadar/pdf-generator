@@ -121,6 +121,10 @@ neighbouring line and produces a bogus delta.
   revision is a one-file change.
 - Assert the template geometry, so a re-export at the wrong page size fails loudly
   instead of shifting everything: `$pdf->assertTemplateSize('poster.pdf', 210.0, 297.0)`.
+  Design tools do not export exact ISO sizes - Canva's "A4" is 210.079 x 297.127 mm - so the
+  default tolerance is a generous 0.5 mm, which still separates any two formats
+  you could confuse. `pdfinfo` or `templateSize()` gives you the real numbers if
+  you want to assert those instead.
 - Add a golden-file test (see [testing-generated-pdfs.md](testing-generated-pdfs.md)) so a
   font update cannot silently reflow a print run.
 - State the values you derived in your commit message or PR, so a human can
